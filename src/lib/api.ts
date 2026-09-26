@@ -1,6 +1,8 @@
 /**
  * Thin fetch wrapper for the Laravel API.
- * - Same-origin cookie auth (Sanctum SPA) with CSRF via the XSRF-TOKEN cookie.
+ * - Cookie auth (Sanctum SPA) with CSRF via the XSRF-TOKEN cookie. Works same-origin
+ *   (relative paths, VITE_API_URL unset) or cross-subdomain (VITE_API_URL set, e.g.
+ *   https://api.yourdomain.com) as long as SESSION_DOMAIN covers both subdomains.
  * - Consistent ApiError with field errors for forms.
  */
 
@@ -33,7 +35,8 @@ export interface Envelope<T> {
   meta?: Record<string, unknown>;
 }
 
-const BASE = '/api/v1';
+const API_ORIGIN = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+const BASE = API_ORIGIN + '/api/v1';
 let csrfReady = false;
 let onUnauthenticated: (() => void) | null = null;
 
@@ -48,7 +51,7 @@ function readCookie(name: string): string | null {
 
 async function ensureCsrf() {
   if (csrfReady && readCookie('XSRF-TOKEN')) return;
-  await fetch('/sanctum/csrf-cookie', { credentials: 'include' });
+  await fetch(API_ORIGIN + '/sanctum/csrf-cookie', { credentials: 'include' });
   csrfReady = true;
 }
 
