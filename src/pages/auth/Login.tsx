@@ -44,14 +44,6 @@ export default function Login() {
     <AuthLayout
       title={needsCode ? 'Two-step verification' : 'Welcome back'}
       subtitle={needsCode ? 'Enter the 6-digit code from your authenticator app.' : 'Sign in to manage your service operations.'}
-      footer={
-        <>
-          New to ServiceCRM?{' '}
-          <Link to="/register" className="font-medium text-brand-700 hover:underline">
-            Start a free trial
-          </Link>
-        </>
-      }
     >
       <form onSubmit={submit} className="space-y-5" noValidate>
         {error && !error.field('email') && !error.field('code') && (
