@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import { CheckCircle2, Wrench } from 'lucide-react';
+import { ClipboardList, MapPin, Package, ShieldCheck, Wallet, Wrench } from 'lucide-react';
+
+const modules = [
+  { icon: ClipboardList, label: 'Job cards', hint: 'Complaint to closure' },
+  { icon: MapPin, label: 'Field visits', hint: 'Live technician status' },
+  { icon: Package, label: 'Inventory', hint: 'Spares used per visit' },
+  { icon: Wallet, label: 'Collections', hint: 'Daily cash close' },
+];
 
 export function AuthLayout({ title, subtitle, children, footer, brand }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode; brand?: string }) {
   return (
@@ -14,22 +21,27 @@ export function AuthLayout({ title, subtitle, children, footer, brand }: { title
             <span className="text-lg font-semibold">{brand ?? 'ServiceCRM'}</span>
           </div>
           <div className="max-w-md">
-            <h2 className="text-3xl font-semibold leading-tight">Run your entire service operation from one place.</h2>
-            <ul className="mt-8 space-y-4 text-slate-300">
-              {[
-                'Log complaints, assign technicians and track every visit live',
-                'Spares & consumables stock that updates as technicians work',
-                'Invoices, field cash collection and daily cash close without spreadsheets',
-                'Customer portal, SMS / WhatsApp updates and detailed reports',
-              ].map((line) => (
-                <li key={line} className="flex gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                  {line}
-                </li>
+            <h2 className="text-3xl font-semibold leading-tight">Service operations, under control.</h2>
+            <p className="mt-4 text-sm leading-relaxed text-slate-400">
+              One record per complaint — from the first call through the technician's visit to the payment collected in the field.
+            </p>
+            <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-7">
+              {modules.map(({ icon: Icon, label, hint }) => (
+                <div key={label}>
+                  <Icon className="h-5 w-5 text-brand-400" />
+                  <dt className="mt-3 text-sm font-medium text-white">{label}</dt>
+                  <dd className="mt-0.5 text-xs text-slate-400">{hint}</dd>
+                </div>
               ))}
-            </ul>
+            </dl>
           </div>
-          <p className="text-xs text-slate-500">© {new Date().getFullYear()} ServiceCRM</p>
+          <div className="space-y-3">
+            <p className="flex items-center gap-2 text-xs text-slate-400">
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              Role-based access, two-factor sign-in and a full audit trail.
+            </p>
+            <p className="text-xs text-slate-500">© {new Date().getFullYear()} ServiceCRM</p>
+          </div>
         </div>
       </div>
       <div className="flex items-center justify-center px-4 py-12 sm:px-8">
