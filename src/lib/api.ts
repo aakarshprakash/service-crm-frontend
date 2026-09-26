@@ -1,8 +1,12 @@
 /**
  * Thin fetch wrapper for the Laravel API.
- * - Cookie auth (Sanctum SPA) with CSRF via the XSRF-TOKEN cookie. Works same-origin
- *   (relative paths, VITE_API_URL unset) or cross-subdomain (VITE_API_URL set, e.g.
- *   https://api.yourdomain.com) as long as SESSION_DOMAIN covers both subdomains.
+ * - Cookie auth (Sanctum SPA session cookie, sent automatically by the browser on every
+ *   request). The CSRF token is fetched from GET /api/v1/csrf-token and kept in memory
+ *   rather than read from the XSRF-TOKEN cookie, since JS can't read a cookie set by a
+ *   different root domain — this works same-origin, same-root-domain, or fully cross-site
+ *   (e.g. Cloudflare Pages frontend + a separate API host), as long as CORS allows the
+ *   frontend origin with credentials and the session cookie is SameSite=None; Secure for
+ *   the cross-site case.
  * - Consistent ApiError with field errors for forms.
  */
 
@@ -40,22 +44,18 @@ const BASE = API_ORIGIN + '/api/v1';
 
 /** For direct <a href>/<img src> links that hit the API outside the fetch wrapper (downloads, images). */
 export const API_BASE = BASE;
-let csrfReady = false;
+let csrfToken: string | null = null;
 let onUnauthenticated: (() => void) | null = null;
 
 export function setUnauthenticatedHandler(handler: () => void) {
   onUnauthenticated = handler;
 }
 
-function readCookie(name: string): string | null {
-  const match = document.cookie.split('; ').find((row) => row.startsWith(name + '='));
-  return match ? decodeURIComponent(match.split('=')[1]) : null;
-}
-
 async function ensureCsrf() {
-  if (csrfReady && readCookie('XSRF-TOKEN')) return;
-  await fetch(API_ORIGIN + '/sanctum/csrf-cookie', { credentials: 'include' });
-  csrfReady = true;
+  if (csrfToken) return;
+  const res = await fetch(BASE + '/csrf-token', { credentials: 'include' });
+  const json = await res.json();
+  csrfToken = json.token;
 }
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -76,8 +76,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
 
   const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
   if (!isForm && body !== undefined) headers['Content-Type'] = 'application/json';
-  const xsrf = readCookie('XSRF-TOKEN');
-  if (xsrf) headers['X-XSRF-TOKEN'] = xsrf;
+  if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
 
   let res: Response;
   try {
@@ -93,7 +92,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
 
   // CSRF token expired → refresh once and retry.
   if (res.status === 419 && retry) {
-    csrfReady = false;
+    csrfToken = null;
     return request<T>(method, path, body, false);
   }
 
