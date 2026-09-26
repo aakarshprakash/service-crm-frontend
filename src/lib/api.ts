@@ -37,6 +37,9 @@ export interface Envelope<T> {
 
 const API_ORIGIN = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 const BASE = API_ORIGIN + '/api/v1';
+
+/** For direct <a href>/<img src> links that hit the API outside the fetch wrapper (downloads, images). */
+export const API_BASE = BASE;
 let csrfReady = false;
 let onUnauthenticated: (() => void) | null = null;
 

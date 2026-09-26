@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Pencil, Plus, Trash2, Upload } from 'lucide-react';
-import { api, type Envelope, type Paginated } from '@/lib/api';
+import { api, API_BASE, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hooks';
 import { dateTime, label, money } from '@/lib/format';
@@ -127,7 +127,7 @@ function Company({ data }: { data: SettingsData }) {
       </Card>
       <div className="space-y-6">
         <Card title="Logo">
-          {data.has_logo && <img src={`/api/v1/settings/logo?v=${logoVersion}`} alt="Company logo" className="mb-4 max-h-20 rounded border border-slate-100 p-2" />}
+          {data.has_logo && <img src={`${API_BASE}/settings/logo?v=${logoVersion}`} alt="Company logo" className="mb-4 max-h-20 rounded border border-slate-100 p-2" />}
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
             <Upload className="h-4 w-4" /> Upload PNG / JPG
             <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(ev) => ev.target.files?.[0] && uploadLogo(ev.target.files[0])} />

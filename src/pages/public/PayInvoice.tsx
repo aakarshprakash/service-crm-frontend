@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Download, ShieldCheck, Wrench } from 'lucide-react';
-import { api, type Envelope } from '@/lib/api';
+import { api, API_BASE, type Envelope } from '@/lib/api';
 import { openCheckout } from '@/lib/checkout';
 import { date, money } from '@/lib/format';
 import { Button, Card, QueryState, toast } from '@/components/ui';
@@ -86,7 +86,7 @@ export default function PayInvoice() {
                 </Button>
               )}
               {inv.balance_amount > 0 && !inv.online_payments && <p className="rounded-lg bg-slate-50 p-3 text-center text-sm text-slate-600">Please pay our service agent (cash / UPI / cheque) or at our office.</p>}
-              <a href={`/api/v1/pay/${token}/pdf`} className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-brand-700 hover:underline">
+              <a href={`${API_BASE}/pay/${token}/pdf`} className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-brand-700 hover:underline">
                 <Download className="h-4 w-4" /> Download invoice (PDF)
               </a>
               <p className="mt-6 flex items-center justify-center gap-1 text-xs text-slate-400">
