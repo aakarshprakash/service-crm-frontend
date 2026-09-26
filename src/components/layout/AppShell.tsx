@@ -7,7 +7,7 @@ import {
   Receipt, Settings, ShieldCheck, UserCircle, Users, Wallet, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
-import { api, type Paginated } from '@/lib/api';
+import { api, setToken, type Paginated } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { useOnline } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
@@ -68,7 +68,8 @@ export function AppShell() {
   useEffect(() => setOpen(false), [location.pathname]);
 
   const stopImpersonating = async () => {
-    const res = await api.post<{ data: { user: typeof user } }>('/impersonation/stop');
+    const res = await api.post<{ data: { user: typeof user; token?: string } }>('/impersonation/stop');
+    if (res.data.token) setToken(res.data.token);
     setUser(res.data.user);
     navigate('/admin/tenants');
   };

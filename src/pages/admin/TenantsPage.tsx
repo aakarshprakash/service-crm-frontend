@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { LogIn, Plus } from 'lucide-react';
-import { api, type Envelope } from '@/lib/api';
+import { api, setToken, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery } from '@/lib/hooks';
 import { date, toLocalInput } from '@/lib/format';
@@ -108,8 +108,9 @@ function ManageTenant({ tenant, onClose }: { tenant: TenantRow; onClose: () => v
   const update = useApiMutation(() => api.patch(`/admin/tenants/${tenant.id}`, { plan_id: Number(plan), trial_ends_at: trialEnds || null }), { invalidate: [['tenants']], onSuccess: onClose });
   const status = useApiMutation((s: string) => api.patch(`/admin/tenants/${tenant.id}/status`, { status: s }), { invalidate: [['tenants']], onSuccess: onClose });
   const remove = useApiMutation(() => api.delete(`/admin/tenants/${tenant.id}`, { confirm: typed }), { invalidate: [['tenants']], toastValidation: true, onSuccess: onClose });
-  const impersonate = useApiMutation(() => api.post<Envelope<{ user: AuthUser }>>(`/admin/tenants/${tenant.id}/impersonate`), {
+  const impersonate = useApiMutation(() => api.post<Envelope<{ user: AuthUser; token?: string }>>(`/admin/tenants/${tenant.id}/impersonate`), {
     onSuccess: (r) => {
+      if (r.data.token) setToken(r.data.token);
       setUser(r.data.user);
       navigate('/dashboard');
     },

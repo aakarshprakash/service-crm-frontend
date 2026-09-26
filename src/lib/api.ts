@@ -1,12 +1,10 @@
 /**
  * Thin fetch wrapper for the Laravel API.
- * - Cookie auth (Sanctum SPA session cookie, sent automatically by the browser on every
- *   request). The CSRF token is fetched from GET /api/v1/csrf-token and kept in memory
- *   rather than read from the XSRF-TOKEN cookie, since JS can't read a cookie set by a
- *   different root domain — this works same-origin, same-root-domain, or fully cross-site
- *   (e.g. Cloudflare Pages frontend + a separate API host), as long as CORS allows the
- *   frontend origin with credentials and the session cookie is SameSite=None; Secure for
- *   the cross-site case.
+ * - Bearer-token auth (Sanctum personal access token) rather than a cookie session.
+ *   The API is often served from a different domain than the app, and browsers block
+ *   third-party cookies, so a session cookie set by the API would never be sent back.
+ *   A token in the Authorization header has no such restriction, and it makes CSRF
+ *   protection unnecessary — the browser can't attach it to a forged cross-site request.
  * - Consistent ApiError with field errors for forms.
  */
 
@@ -42,20 +40,36 @@ export interface Envelope<T> {
 const API_ORIGIN = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 const BASE = API_ORIGIN + '/api/v1';
 
-/** For direct <a href>/<img src> links that hit the API outside the fetch wrapper (downloads, images). */
+/** For public <a href> links that hit the API outside the fetch wrapper (e.g. the payment-link PDF). */
 export const API_BASE = BASE;
-let csrfToken: string | null = null;
+
+const TOKEN_KEY = 'servicecrm.token';
 let onUnauthenticated: (() => void) | null = null;
 
 export function setUnauthenticatedHandler(handler: () => void) {
   onUnauthenticated = handler;
 }
 
-async function ensureCsrf() {
-  if (csrfToken) return;
-  const res = await fetch(BASE + '/csrf-token', { credentials: 'include' });
-  const json = await res.json();
-  csrfToken = json.token;
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private mode / blocked storage — the session just won't survive a reload. */
+  }
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = getToken();
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
 }
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -70,30 +84,21 @@ export function toQuery(params?: Query): string {
   return s ? `?${s}` : '';
 }
 
-async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
-  if (method !== 'GET') await ensureCsrf();
 
-  const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+  const headers = authHeaders({ Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' });
   if (!isForm && body !== undefined) headers['Content-Type'] = 'application/json';
-  if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
 
   let res: Response;
   try {
     res = await fetch(BASE + path, {
       method,
-      credentials: 'include',
       headers,
       body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new ApiError(0, 'Network error. Check your internet connection and try again.');
-  }
-
-  // CSRF token expired → refresh once and retry.
-  if (res.status === 419 && retry) {
-    csrfToken = null;
-    return request<T>(method, path, body, false);
   }
 
   const text = await res.text();
@@ -105,7 +110,10 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   }
 
   if (!res.ok) {
-    if (res.status === 401 && onUnauthenticated && !path.startsWith('/auth/login')) onUnauthenticated();
+    if (res.status === 401 && !path.startsWith('/auth/login')) {
+      setToken(null);
+      onUnauthenticated?.();
+    }
     const message =
       res.status === 429
         ? 'Too many attempts. Please wait a minute and try again.'
@@ -123,9 +131,19 @@ export const api = {
   delete: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body),
 };
 
-/** Download a binary (PDF / XLSX) through the authenticated session. */
+/**
+ * Fetches an authenticated image as an object URL, since <img src> can't send the
+ * Authorization header. Callers must URL.revokeObjectURL() the result when done.
+ */
+export async function imageObjectUrl(path: string): Promise<string> {
+  const res = await fetch(BASE + path, { headers: authHeaders({ Accept: 'image/*' }) });
+  if (!res.ok) throw new ApiError(res.status, 'Could not load image.');
+  return URL.createObjectURL(await res.blob());
+}
+
+/** Download a binary (PDF / XLSX) as the authenticated user. */
 export async function download(path: string, fallbackName: string): Promise<{ queued?: boolean; message?: string }> {
-  const res = await fetch(BASE + path, { credentials: 'include', headers: { Accept: '*/*', 'X-Requested-With': 'XMLHttpRequest' } });
+  const res = await fetch(BASE + path, { headers: authHeaders({ Accept: '*/*', 'X-Requested-With': 'XMLHttpRequest' }) });
   const type = res.headers.get('Content-Type') || '';
   if (type.includes('application/json')) {
     const json = await res.json();

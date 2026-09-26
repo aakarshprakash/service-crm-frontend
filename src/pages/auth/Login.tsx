@@ -4,7 +4,7 @@ import { ShieldCheck } from 'lucide-react';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, Input } from '@/components/ui';
 import { homePath, useAuth } from '@/auth/AuthProvider';
-import { api, ApiError, type Envelope } from '@/lib/api';
+import { api, ApiError, setToken, type Envelope } from '@/lib/api';
 import { safeNext } from '@/lib/utils';
 import type { AuthUser } from '@/lib/types';
 
@@ -24,12 +24,13 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Envelope<{ user?: AuthUser; two_factor?: boolean }>>('/auth/login', { email, password, code: needsCode ? code : undefined });
+      const res = await api.post<Envelope<{ user?: AuthUser; two_factor?: boolean; token?: string }>>('/auth/login', { email, password, code: needsCode ? code : undefined });
       if (res.data.two_factor) {
         setNeedsCode(true);
         return;
       }
       const user = res.data.user!;
+      setToken(res.data.token ?? null);
       setUser(user);
       navigate(safeNext(params.get('next'), homePath(user)), { replace: true });
     } catch (err) {

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, Input, QueryState } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
-import { api, ApiError, type Envelope } from '@/lib/api';
+import { api, ApiError, setToken, type Envelope } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
 
 export default function PortalLogin() {
@@ -39,7 +39,8 @@ export default function PortalLogin() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Envelope<{ user: AuthUser }>>('/auth/otp/verify', { company: slug, phone, code });
+      const res = await api.post<Envelope<{ user: AuthUser; token: string }>>('/auth/otp/verify', { company: slug, phone, code });
+      setToken(res.data.token);
       setUser(res.data.user);
       navigate(`/portal/${slug}`, { replace: true });
     } catch (err) {

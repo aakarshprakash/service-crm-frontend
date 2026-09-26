@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, setUnauthenticatedHandler, type Envelope } from '@/lib/api';
+import { api, ApiError, getToken, setToken, setUnauthenticatedHandler, type Envelope } from '@/lib/api';
 import { configureFormatting } from '@/lib/format';
 import type { AuthUser, Role } from '@/lib/types';
 
@@ -41,6 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (!getToken()) {
+      setUser(null);
+      return;
+    }
     try {
       const res = await api.get<Envelope<{ user: AuthUser }>>('/auth/me');
       setUser(res.data.user);
@@ -68,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api.post('/auth/logout');
     } finally {
       const slug = user?.role === 'customer' ? user.tenant?.slug : null;
+      setToken(null);
       setUser(null);
       queryClient.clear();
       window.location.assign(slug ? `/portal/${slug}/login` : '/login');

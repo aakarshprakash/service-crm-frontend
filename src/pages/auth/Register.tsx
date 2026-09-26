@@ -5,7 +5,7 @@ import { Check } from 'lucide-react';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, Input } from '@/components/ui';
 import { homePath, useAuth } from '@/auth/AuthProvider';
-import { api, ApiError, type Envelope } from '@/lib/api';
+import { api, ApiError, setToken, type Envelope } from '@/lib/api';
 import { money } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { AuthUser } from '@/lib/types';
@@ -43,7 +43,8 @@ export default function Register() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Envelope<{ user: AuthUser }>>('/auth/register', { ...form, plan_id: form.plan_id || plans?.[0]?.id });
+      const res = await api.post<Envelope<{ user: AuthUser; token: string }>>('/auth/register', { ...form, plan_id: form.plan_id || plans?.[0]?.id });
+      setToken(res.data.token);
       setUser(res.data.user);
       navigate(homePath(res.data.user), { replace: true });
     } catch (err) {
