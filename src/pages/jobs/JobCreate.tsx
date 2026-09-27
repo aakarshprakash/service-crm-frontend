@@ -8,6 +8,7 @@ import { fromLocalInput } from '@/lib/format';
 import type { Customer, CustomerProduct, Job } from '@/lib/types';
 import { Button, Card, Field, Input, PageHeader, SearchInput, Select, Textarea, toast } from '@/components/ui';
 import { CustomerForm, type CustomerDraft, emptyCustomer } from '@/pages/customers/CustomerForm';
+import { Hint } from '@/components/tutorial';
 
 export default function JobCreate() {
   const navigate = useNavigate();
@@ -169,9 +170,11 @@ export default function JobCreate() {
                     {results.data && !results.data.data.length && <p className="px-3 py-4 text-center text-sm text-slate-500">No customer matches “{search}”.</p>}
                   </div>
                 )}
-                <Button variant="outline" icon={<UserPlus className="h-4 w-4" />} onClick={() => setNewCustomer({ ...emptyCustomer, phone: /^\d+$/.test(search) ? search : '', name: /^\d+$/.test(search) ? '' : search })}>
-                  Add a new customer
-                </Button>
+                <Hint align="left" text="Opens a short customer form right here. The customer is saved together with the job when you click Create job.">
+                  <Button variant="outline" icon={<UserPlus className="h-4 w-4" />} onClick={() => setNewCustomer({ ...emptyCustomer, phone: /^\d+$/.test(search) ? search : '', name: /^\d+$/.test(search) ? '' : search })}>
+                    Add a new customer
+                  </Button>
+                </Hint>
               </div>
             )}
           </Card>
@@ -258,9 +261,11 @@ export default function JobCreate() {
             <Button variant="secondary" className="flex-1" onClick={() => navigate('/jobs')}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1" loading={saving}>
-              Create job
-            </Button>
+            <Hint className="flex-1" text="Saves the job with a new job number. The customer is sent a confirmation, and if you picked a technician they get a push notification.">
+              <Button type="submit" className="flex-1" loading={saving}>
+                Create job
+              </Button>
+            </Hint>
           </div>
         </div>
       </div>

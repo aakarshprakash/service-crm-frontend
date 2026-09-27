@@ -9,6 +9,7 @@ import { date, dateTime, duration, fromLocalInput, label, money, qty, toLocalInp
 import type { Job } from '@/lib/types';
 import { Badge, Button, Card, ConfirmDialog, DefinitionList, Field, Input, Modal, PageHeader, QueryState, Select, Textarea } from '@/components/ui';
 import { MapEmbed, MethodLabel, PriorityBadge, Section, StatusBadge, Stars } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -39,21 +40,35 @@ export default function JobDetail() {
               <>
                 {manage && (
                   <>
-                    <Button variant="secondary" icon={<UserCog className="h-4 w-4" />} onClick={() => setDialog('assign')}>
-                      {job.technician ? 'Reassign' : 'Assign'}
-                    </Button>
-                    <Button variant="secondary" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setDialog('reschedule')}>
-                      Reschedule
-                    </Button>
-                    <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<XCircle className="h-4 w-4" />} onClick={() => setDialog('cancel')}>
-                      Cancel job
-                    </Button>
+                    <Hint
+                      text={
+                        job.technician
+                          ? 'Hands the job to another technician. The new technician gets a push notification, the previous one is told it was reassigned, and the customer is sent the new technician’s details.'
+                          : 'Picks the technician for this job. They get a push notification and the customer is sent their name and phone number.'
+                      }
+                    >
+                      <Button variant="secondary" icon={<UserCog className="h-4 w-4" />} onClick={() => setDialog('assign')}>
+                        {job.technician ? 'Reassign' : 'Assign'}
+                      </Button>
+                    </Hint>
+                    <Hint text="Moves the visit to a new date and time. The assigned technician is notified.">
+                      <Button variant="secondary" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setDialog('reschedule')}>
+                        Reschedule
+                      </Button>
+                    </Hint>
+                    <Hint text="Closes the job as cancelled, with a reason. Any visit in progress is stopped. This can’t be undone.">
+                      <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<XCircle className="h-4 w-4" />} onClick={() => setDialog('cancel')}>
+                        Cancel job
+                      </Button>
+                    </Hint>
                   </>
                 )}
                 {can('jobs.manage') && (
-                  <Button variant="outline" icon={<Repeat2 className="h-4 w-4" />} onClick={() => setDialog('followup')}>
-                    Follow-up call
-                  </Button>
+                  <Hint text="Creates a new job linked to this one, copying the customer, product, complaint and technician. Use it for a revisit or a repeat complaint.">
+                    <Button variant="outline" icon={<Repeat2 className="h-4 w-4" />} onClick={() => setDialog('followup')}>
+                      Follow-up call
+                    </Button>
+                  </Hint>
                 )}
               </>
             }

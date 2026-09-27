@@ -13,6 +13,7 @@ import { useOnline } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import type { NotificationItem } from '@/lib/types';
 import { Avatar, Button, SearchInput, toast } from '@/components/ui';
+import { PageGuide } from '@/components/tutorial';
 
 interface NavItem {
   to: string;
@@ -175,6 +176,7 @@ export function AppShell() {
         </header>
 
         <main className={cn('mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8', isTech && 'pb-24 lg:pb-6')}>
+          <PageGuide />
           <Outlet />
         </main>
       </div>

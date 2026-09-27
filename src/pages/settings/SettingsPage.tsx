@@ -23,6 +23,7 @@ interface SettingsData {
     online_payments: boolean;
     strict_cash_close: boolean;
     customer_portal: boolean;
+    tutorial_mode: boolean;
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -231,6 +232,16 @@ function Preferences({ data }: { data: SettingsData }) {
         <p className="mt-3 text-xs text-slate-500">
           Example: {s.job_prefix}-2609-00042 · {s.invoice_prefix}-2609-00042
         </p>
+      </Card>
+      <Card title="Onboarding" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
+        <div className="divide-y divide-slate-100">
+          <Row
+            title="Tutorial mode"
+            desc="Show everyone in your company a short guide at the top of each page, and ⓘ hints next to buttons explaining what happens when they're clicked. Turn it off once your team is comfortable."
+            checked={s.tutorial_mode}
+            onChange={(v) => setS({ ...s, tutorial_mode: v })}
+          />
+        </div>
       </Card>
     </div>
   );

@@ -7,6 +7,7 @@ import { date, money, time, toMajor, toMinor, today } from '@/lib/format';
 import type { CashClose, CashSummary } from '@/lib/types';
 import { Button, Card, ConfirmDialog, Field, Input, QueryState, Textarea } from '@/components/ui';
 import { MethodLabel, StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 /** FR-15.1 / FR-15.2: the service agent's end-of-day cash close. */
 export default function TechCash() {
@@ -96,9 +97,11 @@ export default function TechCash() {
                       <Textarea rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="e.g. Gave ₹200 change to a customer" />
                     </Field>
                   )}
-                  <Button size="lg" className="w-full" icon={<CheckCircle2 className="h-5 w-5" />} disabled={!!s.pending_dates.length} onClick={() => setConfirming(true)}>
-                    Submit for closing
-                  </Button>
+                  <Hint block text="Sends this day’s cash and cheque total to accounts for checking. After this, the day’s collections are locked and can’t be changed. If an earlier day is still open, close that one first.">
+                    <Button size="lg" className="w-full" icon={<CheckCircle2 className="h-5 w-5" />} disabled={!!s.pending_dates.length} onClick={() => setConfirming(true)}>
+                      Submit for closing
+                    </Button>
+                  </Hint>
                 </div>
               </Card>
             )}

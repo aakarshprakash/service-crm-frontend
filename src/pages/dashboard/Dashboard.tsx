@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { useLookups } from '@/lib/hooks';
 import { Badge, Button, Card, DataTable, EmptyState, PageHeader, QueryState, Select, StatCard } from '@/components/ui';
 import { Stars } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 interface DashboardData {
   jobs: {
@@ -71,9 +72,11 @@ export default function Dashboard() {
               </Select>
             )}
             {can('jobs.manage') && (
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/jobs/new')}>
-                New job
-              </Button>
+              <Hint text="Opens the form to log a customer complaint as a new job. The customer gets a confirmation once it's saved.">
+                <Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/jobs/new')}>
+                  New job
+                </Button>
+              </Hint>
             )}
           </>
         }

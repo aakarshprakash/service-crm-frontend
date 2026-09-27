@@ -13,6 +13,7 @@ import type { InventoryItem, Invoice, Job, Payment, Visit } from '@/lib/types';
 import { Badge, Button, Card, ConfirmDialog, DataTable, DefinitionList, Field, Input, Modal, QueryState, Select, Spinner, Tabs, Textarea, toast } from '@/components/ui';
 import { MapEmbed, MethodLabel, PriorityBadge, StatusBadge } from '@/components/domain';
 import { RecordPayment } from '@/pages/invoices/InvoiceDetail';
+import { Hint } from '@/components/tutorial';
 
 export default function TechJobDetail() {
   const { id } = useParams();
@@ -45,15 +46,19 @@ export default function TechJobDetail() {
               <JobInfo job={job} />
               {['open', 'pending'].includes(job.status) && (
                 <div className="sticky bottom-20 z-10 lg:bottom-4">
-                  <Button size="lg" className="w-full shadow-lg" icon={<Wrench className="h-5 w-5" />} onClick={() => setStarting(true)}>
-                    Continue to service
-                  </Button>
+                  <Hint block text="Asks where you’re working (on site, by phone or at the office) and starts the visit timer. On-site visits need your phone’s location. You can only have one visit running at a time.">
+                    <Button size="lg" className="w-full shadow-lg" icon={<Wrench className="h-5 w-5" />} onClick={() => setStarting(true)}>
+                      Continue to service
+                    </Button>
+                  </Hint>
                 </div>
               )}
               {job.invoice && job.invoice.balance_amount > 0 && (
-                <Button variant="outline" className="w-full" icon={<HandCoins className="h-4 w-4" />} onClick={() => setCollecting(true)}>
-                  Collect balance {money(job.invoice.balance_amount)}
-                </Button>
+                <Hint block text="Records money the customer is paying now towards the unpaid bill. You get a receipt number, and cash or cheques are handed over at your daily cash close.">
+                  <Button variant="outline" className="w-full" icon={<HandCoins className="h-4 w-4" />} onClick={() => setCollecting(true)}>
+                    Collect balance {money(job.invoice.balance_amount)}
+                  </Button>
+                </Hint>
               )}
             </>
           )}
@@ -756,9 +761,20 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
           </>
         )}
 
-        <Button size="lg" className="w-full" variant={form.status === 'cancelled' ? 'danger' : 'primary'} icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => setConfirming(true)}>
-          {form.status === 'completed' ? 'Save & generate invoice' : form.status === 'pending' ? 'Save as pending' : 'Cancel this job'}
-        </Button>
+        <Hint
+          block
+          text={
+            form.status === 'completed'
+              ? 'Ends the visit and closes the job. The invoice is created from your charges and parts, any payment you collected is recorded, and the customer is sent the bill.'
+              : form.status === 'pending'
+                ? 'Ends this visit but keeps the job open, e.g. while a part is on order. The job can be visited again later.'
+                : 'Ends the visit and cancels the job for good. This can’t be undone.'
+          }
+        >
+          <Button size="lg" className="w-full" variant={form.status === 'cancelled' ? 'danger' : 'primary'} icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => setConfirming(true)}>
+            {form.status === 'completed' ? 'Save & generate invoice' : form.status === 'pending' ? 'Save as pending' : 'Cancel this job'}
+          </Button>
+        </Hint>
       </div>
       <ConfirmDialog
         open={confirming}

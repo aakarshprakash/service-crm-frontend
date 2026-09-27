@@ -8,6 +8,7 @@ import { relative } from '@/lib/format';
 import type { StaffUser } from '@/lib/types';
 import { Avatar, Badge, Button, Card, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 export default function TeamPage() {
   const { t } = useTranslation();
@@ -28,7 +29,15 @@ export default function TeamPage() {
       <PageHeader
         title="Team"
         description="Office staff and field technicians. Access is controlled by role."
-        actions={manage && <Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setEditing('new')}>Add team member</Button>}
+        actions={
+          manage && (
+            <Hint text="Adds a person with a role (admin, coordinator, accounts or technician) and emails them an invitation to set their own password. Until they accept, you can resend it from the list.">
+              <Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setEditing('new')}>
+                Add team member
+              </Button>
+            </Hint>
+          )
+        }
       />
       <Card padded={false}>
         <FilterBar>

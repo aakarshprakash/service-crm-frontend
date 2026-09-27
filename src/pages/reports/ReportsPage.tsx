@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import type { ReportColumn, ReportData } from '@/lib/types';
 import { Badge, Button, Card, EmptyState, FilterBar, Input, Modal, PageHeader, QueryState, Select, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 interface ReportMeta { key: string; title: string; description: string; financial: boolean }
 interface ExportRow { id: number; title: string; format: string; status: string; created_at: string; error: string | null }
@@ -31,7 +32,13 @@ export default function ReportsPage() {
       <PageHeader
         title="Reports"
         description="Every report can be viewed on screen and exported to Excel or PDF."
-        actions={<Button variant="secondary" onClick={() => setShowExports(true)}>My exports</Button>}
+        actions={
+          <Hint text="Lists large reports that were prepared in the background. Each one can be downloaded for 7 days.">
+            <Button variant="secondary" onClick={() => setShowExports(true)}>
+              My exports
+            </Button>
+          </Hint>
+        }
       />
       <QueryState loading={reports.isLoading} error={reports.error}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -100,9 +107,11 @@ function ReportViewer({ reportKey, meta, onBack }: { reportKey: string; meta?: R
             <Button variant="secondary" icon={<FileSpreadsheet className="h-4 w-4 text-emerald-700" />} loading={exporting === 'xlsx'} onClick={() => doExport('xlsx')}>
               Excel
             </Button>
-            <Button variant="secondary" icon={<FileText className="h-4 w-4 text-red-600" />} loading={exporting === 'pdf'} onClick={() => doExport('pdf')}>
-              PDF
-            </Button>
+            <Hint text="Excel and PDF download this report with the filters you’ve set. Very large reports are prepared in the background instead: you’re notified when ready and can download them from My exports.">
+              <Button variant="secondary" icon={<FileText className="h-4 w-4 text-red-600" />} loading={exporting === 'pdf'} onClick={() => doExport('pdf')}>
+                PDF
+              </Button>
+            </Hint>
           </>
         }
       />

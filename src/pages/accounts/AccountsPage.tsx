@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import type { CashClose, CashSummary } from '@/lib/types';
 import { Button, Card, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, Select, StatCard, Tabs, Textarea } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 type Tab = 'queue' | 'in_hand';
 
@@ -26,9 +27,11 @@ export default function AccountsPage() {
         description="Reconcile cash & cheques collected by service agents against what is handed over and deposited."
         actions={
           is('admin') && (
-            <Button variant="secondary" icon={<Lock className="h-4 w-4" />} onClick={() => setForceClose(true)}>
-              Close on behalf of technician
-            </Button>
+            <Hint text="Submits a day’s cash close for a technician who couldn’t do it, e.g. they forgot. It skips the rule that earlier days must be closed first. That day’s payments are then locked.">
+              <Button variant="secondary" icon={<Lock className="h-4 w-4" />} onClick={() => setForceClose(true)}>
+                Close on behalf of technician
+              </Button>
+            </Hint>
           )
         }
       />

@@ -8,6 +8,7 @@ import { date, dateTime, money, toMajor, toMinor, today } from '@/lib/format';
 import type { CashClose, CashSummary } from '@/lib/types';
 import { Button, Card, DataTable, Field, Input, Modal, PageHeader, QueryState, Select, Textarea } from '@/components/ui';
 import { MethodLabel, StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 export default function CashCloseDetail() {
   const { id } = useParams();
@@ -35,14 +36,18 @@ export default function CashCloseDetail() {
             actions={
               <>
                 {c.status === 'submitted' && (
-                  <Button icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setDialog('verify')}>
-                    Verify
-                  </Button>
+                  <Hint text="Confirms the cash and cheques you physically received from the technician. If your count differs from what was expected, you must add a remark explaining the difference.">
+                    <Button icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setDialog('verify')}>
+                      Verify
+                    </Button>
+                  </Hint>
                 )}
                 {c.status !== 'closed' && c.closing_balance > 0 && (
-                  <Button variant="secondary" icon={<Landmark className="h-4 w-4" />} onClick={() => setDialog('deposit')}>
-                    Record deposit
-                  </Button>
+                  <Hint text="Logs money deposited to the bank or handed to the office from this close. It can’t be more than the remaining balance, and it only works on the technician’s latest close.">
+                    <Button variant="secondary" icon={<Landmark className="h-4 w-4" />} onClick={() => setDialog('deposit')}>
+                      Record deposit
+                    </Button>
+                  </Hint>
                 )}
               </>
             }

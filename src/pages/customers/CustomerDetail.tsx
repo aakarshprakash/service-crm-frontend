@@ -9,6 +9,7 @@ import { date, label, money } from '@/lib/format';
 import type { Customer, CustomerProduct, Job } from '@/lib/types';
 import { Badge, Button, Card, ConfirmDialog, DataTable, EmptyState, Modal, PageHeader, QueryState, StatCard } from '@/components/ui';
 import { MapEmbed, StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 import { CustomerForm, emptyProduct, ProductFields, productPayload, type CustomerDraft, type ProductDraft } from './CustomerForm';
 
 interface CustomerView {
@@ -63,12 +64,16 @@ export default function CustomerDetail() {
                 )}
                 {can('customers.privacy') && (
                   <>
-                    <Button variant="ghost" icon={<Download className="h-4 w-4" />} onClick={exportData} title="Export all data held about this customer">
-                      Export data
-                    </Button>
-                    <Button variant="ghost" className="text-red-600 hover:bg-red-50" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleting(true)}>
-                      Delete
-                    </Button>
+                    <Hint text="Downloads everything held about this customer (details, products, jobs, invoices and payments) as a file, e.g. for a data request. The download is recorded in the audit trail.">
+                      <Button variant="ghost" icon={<Download className="h-4 w-4" />} onClick={exportData} title="Export all data held about this customer">
+                        Export data
+                      </Button>
+                    </Hint>
+                    <Hint text="Permanently removes the customer’s name, phone, email and address and disables their portal login. Their jobs and invoices stay for your records. This can’t be undone.">
+                      <Button variant="ghost" className="text-red-600 hover:bg-red-50" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleting(true)}>
+                        Delete
+                      </Button>
+                    </Hint>
                   </>
                 )}
               </>
@@ -99,7 +104,19 @@ export default function CustomerDetail() {
                   ]}
                 />
               </Card>
-              <Card title="Products" actions={can('customers.manage') && <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setProduct({ draft: emptyProduct })}>Add product</Button>} padded={false}>
+              <Card
+                title="Products"
+                actions={
+                  can('customers.manage') && (
+                    <Hint text="Registers an appliance this customer owns, with its serial number, purchase date, warranty and dealer. New jobs are logged against a product.">
+                      <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setProduct({ draft: emptyProduct })}>
+                        Add product
+                      </Button>
+                    </Hint>
+                  )
+                }
+                padded={false}
+              >
                 {c.products.length ? (
                   <ul className="divide-y divide-slate-100">
                     {c.products.map((p) => (

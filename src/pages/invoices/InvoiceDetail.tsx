@@ -9,6 +9,7 @@ import { date, dateTime, money, qty, toMajor, toMinor } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 import { Badge, Button, Card, DataTable, Field, Input, Modal, PageHeader, QueryState, Select, Textarea, toast } from '@/components/ui';
 import { MethodLabel, StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -38,27 +39,35 @@ export default function InvoiceDetail() {
             description={`Generated ${date(inv.generated_at)} · Job ${inv.job?.crm_call_id}`}
             actions={
               <>
-                <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => download(`/invoices/${inv.id}/pdf`, `${inv.invoice_number}.pdf`).catch((e) => toast.error(e.message))}>
-                  PDF
-                </Button>
+                <Hint text="Downloads the invoice as a PDF, with your company details and logo, to print or share.">
+                  <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => download(`/invoices/${inv.id}/pdf`, `${inv.invoice_number}.pdf`).catch((e) => toast.error(e.message))}>
+                    PDF
+                  </Button>
+                </Hint>
                 {inv.pay_link && inv.balance_amount > 0 && (
                   <>
-                    <Button
-                      variant="secondary"
-                      icon={<Copy className="h-4 w-4" />}
-                      onClick={() => navigator.clipboard.writeText(inv.pay_link!).then(() => toast.success('Payment link copied'))}
-                    >
-                      Copy link
-                    </Button>
-                    <Button variant="secondary" icon={<Send className="h-4 w-4" />} loading={remind.isPending} onClick={() => remind.mutate(undefined)}>
-                      Send reminder
-                    </Button>
+                    <Hint text="Copies the online payment link so you can paste it into a message to the customer yourself.">
+                      <Button
+                        variant="secondary"
+                        icon={<Copy className="h-4 w-4" />}
+                        onClick={() => navigator.clipboard.writeText(inv.pay_link!).then(() => toast.success('Payment link copied'))}
+                      >
+                        Copy link
+                      </Button>
+                    </Hint>
+                    <Hint text="Sends the customer an SMS / WhatsApp message (whichever is switched on in Settings) with the balance due and a link to pay online.">
+                      <Button variant="secondary" icon={<Send className="h-4 w-4" />} loading={remind.isPending} onClick={() => remind.mutate(undefined)}>
+                        Send reminder
+                      </Button>
+                    </Hint>
                   </>
                 )}
                 {canCollect && (
-                  <Button icon={<HandCoins className="h-4 w-4" />} onClick={() => setPaying(true)}>
-                    Record payment
-                  </Button>
+                  <Hint text="Records money received for this invoice by cash, UPI, cheque or bank transfer. A receipt number is created and the balance goes down straight away.">
+                    <Button icon={<HandCoins className="h-4 w-4" />} onClick={() => setPaying(true)}>
+                      Record payment
+                    </Button>
+                  </Hint>
                 )}
               </>
             }

@@ -8,6 +8,7 @@ import { date } from '@/lib/format';
 import type { Customer } from '@/lib/types';
 import { Button, Card, DataTable, EmptyState, FilterBar, Modal, PageHeader, Pagination, SearchInput } from '@/components/ui';
 import { CustomerForm, emptyCustomer, productPayload, type CustomerDraft } from './CustomerForm';
+import { Hint } from '@/components/tutorial';
 import { ApiError } from '@/lib/api';
 
 export default function CustomersPage() {
@@ -21,7 +22,15 @@ export default function CustomersPage() {
       <PageHeader
         title="Customers"
         description="Customer records, their products and complete service history."
-        actions={can('customers.manage') && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>Add customer</Button>}
+        actions={
+          can('customers.manage') && (
+            <Hint text="Creates a customer record with their contact details and, optionally, their first product. You can also add customers while logging a new job.">
+              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
+                Add customer
+              </Button>
+            </Hint>
+          )
+        }
       />
       <Card padded={false}>
         <FilterBar>

@@ -9,6 +9,7 @@ import { getPosition } from '@/lib/utils';
 import type { Job, Visit } from '@/lib/types';
 import { Button, Card, QueryState } from '@/components/ui';
 import { PriorityBadge, StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 interface TechDashboard {
   counts: { open: number; in_progress: number; pending: number; completed: number };
@@ -49,15 +50,23 @@ export default function TechHome() {
               <h1 className="text-xl font-semibold">{user?.name}</h1>
               <p className="text-xs text-slate-500">{d.punch_status === 'in' ? `On duty since ${time(d.punched_at)}` : 'You are off duty'}</p>
             </div>
-            {d.punch_status === 'in' ? (
-              <Button variant="secondary" icon={<LogOut className="h-4 w-4" />} loading={punch.isPending} onClick={() => punch.mutate('out')}>
-                Punch out
-              </Button>
-            ) : (
-              <Button variant="success" icon={<LogIn className="h-4 w-4" />} loading={punch.isPending} onClick={() => punch.mutate('in')}>
-                Punch in
-              </Button>
-            )}
+            <Hint
+              text={
+                d.punch_status === 'in'
+                  ? 'Ends your working day. The time is recorded (with your location, if your phone shares it), and the office sees you as off duty.'
+                  : 'Starts your working day. The time is recorded (with your location, if your phone shares it), and the office sees you as on duty when assigning jobs.'
+              }
+            >
+              {d.punch_status === 'in' ? (
+                <Button variant="secondary" icon={<LogOut className="h-4 w-4" />} loading={punch.isPending} onClick={() => punch.mutate('out')}>
+                  Punch out
+                </Button>
+              ) : (
+                <Button variant="success" icon={<LogIn className="h-4 w-4" />} loading={punch.isPending} onClick={() => punch.mutate('in')}>
+                  Punch in
+                </Button>
+              )}
+            </Hint>
           </div>
 
           {d.active_visit && (

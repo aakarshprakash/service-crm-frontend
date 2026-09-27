@@ -8,6 +8,7 @@ import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hook
 import { dateTime, label, money, qty, toMajor, toMinor } from '@/lib/format';
 import type { InventoryItem, Named } from '@/lib/types';
 import { Badge, Button, Card, Checkbox, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, Tabs } from '@/components/ui';
+import { Hint } from '@/components/tutorial';
 
 type Tab = 'items' | 'stock' | 'transactions' | 'suppliers';
 interface Supplier { id: number; name: string; contact: string | null; phone: string | null; email: string | null; gstin: string | null; is_active: boolean }
@@ -33,15 +34,21 @@ export default function InventoryPage() {
         actions={
           manage && (
             <>
-              <Button variant="secondary" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setDialog('adjust')}>
-                Adjust
-              </Button>
-              <Button variant="secondary" icon={<ArrowLeftRight className="h-4 w-4" />} onClick={() => setDialog('transfer')}>
-                Transfer
-              </Button>
-              <Button icon={<PackagePlus className="h-4 w-4" />} onClick={() => setDialog('stockin')}>
-                Stock in
-              </Button>
+              <Hint text="Corrects a branch’s stock count after breakage, loss or a stock-take. A reason is required and kept in Movements and the audit trail.">
+                <Button variant="secondary" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setDialog('adjust')}>
+                  Adjust
+                </Button>
+              </Hint>
+              <Hint text="Moves stock from one branch to another. It comes off the first branch and is added to the second at the same time.">
+                <Button variant="secondary" icon={<ArrowLeftRight className="h-4 w-4" />} onClick={() => setDialog('transfer')}>
+                  Transfer
+                </Button>
+              </Hint>
+              <Hint text="Records stock received from a supplier into a branch, with quantities and cost. You can add several items at once.">
+                <Button icon={<PackagePlus className="h-4 w-4" />} onClick={() => setDialog('stockin')}>
+                  Stock in
+                </Button>
+              </Hint>
             </>
           )
         }
@@ -76,9 +83,11 @@ function Items({ manage }: { manage: boolean }) {
           Low stock only
         </label>
         {manage && (
-          <Button className="sm:ml-auto" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setEditing('new')}>
-            New item
-          </Button>
+          <Hint className="sm:ml-auto" text="Adds a spare or consumable to your catalogue, with its code, price and reorder level. Use Stock in to add quantities.">
+            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setEditing('new')}>
+              New item
+            </Button>
+          </Hint>
         )}
       </FilterBar>
       <DataTable

@@ -13,6 +13,7 @@ export interface TenantInfo {
   trial_ends_at: string | null;
   online_payments: boolean;
   portal_enabled: boolean;
+  tutorial_mode: boolean;
 }
 
 export interface AuthUser {
