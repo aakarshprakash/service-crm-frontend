@@ -20,8 +20,25 @@ const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
 const CustomerDetail = lazy(() => import('@/pages/customers/CustomerDetail'));
 const InvoicesPage = lazy(() => import('@/pages/invoices/InvoicesPage'));
 const InvoiceDetail = lazy(() => import('@/pages/invoices/InvoiceDetail'));
+const WalkInBill = lazy(() => import('@/pages/invoices/WalkInBill'));
+const ExpensesPage = lazy(() => import('@/pages/expenses/ExpensesPage'));
+const BooksPage = lazy(() => import('@/pages/books/BooksPage'));
+const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage'));
+const AssetDetail = lazy(() => import('@/pages/assets/AssetDetail'));
 const AccountsPage = lazy(() => import('@/pages/accounts/AccountsPage'));
 const CashCloseDetail = lazy(() => import('@/pages/accounts/CashCloseDetail'));
+const AccountsOverview = lazy(() => import('@/pages/accounts/AccountsOverview'));
+const ReceivablesPage = lazy(() => import('@/pages/accounts/ReceivablesPage'));
+const ReceiptsPage = lazy(() => import('@/pages/accounts/ReceiptsPage'));
+const CashBankPage = lazy(() => import('@/pages/accounts/CashBankPage'));
+const ProfitLossPage = lazy(() => import('@/pages/accounts/ProfitLossPage'));
+const HrToday = lazy(() => import('@/pages/hr/HrToday'));
+const AttendanceRegister = lazy(() => import('@/pages/hr/AttendanceRegister'));
+const LeaveRequests = lazy(() => import('@/pages/hr/LeaveRequests'));
+const EmployeesPage = lazy(() => import('@/pages/hr/EmployeesPage'));
+const PayrollPage = lazy(() => import('@/pages/hr/PayrollPage'));
+const PayrollRunDetail = lazy(() => import('@/pages/hr/PayrollRunDetail'));
+const MyHr = lazy(() => import('@/pages/hr/MyHr'));
 const InventoryPage = lazy(() => import('@/pages/inventory/InventoryPage'));
 const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const TeamPage = lazy(() => import('@/pages/users/TeamPage'));
@@ -72,6 +89,14 @@ function Home() {
 }
 
 const STAFF: Role[] = ['admin', 'coordinator', 'accountant'];
+const ACCOUNTS: Role[] = ['admin', 'accountant'];
+
+/** /accounts/:id used to be a cash close; send old bookmarks to its new address. */
+function LegacyCashClose() {
+  const { pathname } = useLocation();
+  const id = pathname.split('/').pop();
+  return <Navigate to={/^\d+$/.test(id ?? '') ? `/accounts/cash-close/${id}` : '/accounts'} replace />;
+}
 
 export default function App() {
   return (
@@ -99,10 +124,34 @@ export default function App() {
               <Route path="/customers" element={<RequireAuth roles={STAFF}><CustomersPage /></RequireAuth>} />
               <Route path="/customers/:id" element={<RequireAuth roles={STAFF}><CustomerDetail /></RequireAuth>} />
               <Route path="/invoices" element={<RequireAuth roles={STAFF}><InvoicesPage /></RequireAuth>} />
+              <Route path="/invoices/walk-in/new" element={<RequireAuth roles={STAFF}><WalkInBill /></RequireAuth>} />
               <Route path="/invoices/:id" element={<RequireAuth roles={[...STAFF, 'technician']}><InvoiceDetail /></RequireAuth>} />
-              <Route path="/accounts" element={<RequireAuth roles={['admin', 'accountant']}><AccountsPage /></RequireAuth>} />
-              <Route path="/accounts/:id" element={<RequireAuth roles={['admin', 'accountant']}><CashCloseDetail /></RequireAuth>} />
+              {/* Accounts (v2.1) */}
+              <Route path="/accounts" element={<RequireAuth roles={ACCOUNTS}><AccountsOverview /></RequireAuth>} />
+              <Route path="/accounts/receivables" element={<RequireAuth roles={ACCOUNTS}><ReceivablesPage /></RequireAuth>} />
+              <Route path="/accounts/receipts" element={<RequireAuth roles={ACCOUNTS}><ReceiptsPage /></RequireAuth>} />
+              <Route path="/accounts/expenses" element={<RequireAuth roles={ACCOUNTS}><ExpensesPage /></RequireAuth>} />
+              <Route path="/accounts/cash-bank" element={<RequireAuth roles={ACCOUNTS}><CashBankPage /></RequireAuth>} />
+              <Route path="/accounts/books" element={<RequireAuth roles={ACCOUNTS}><BooksPage /></RequireAuth>} />
+              <Route path="/accounts/profit-loss" element={<RequireAuth roles={ACCOUNTS}><ProfitLossPage /></RequireAuth>} />
+              <Route path="/accounts/cash-close" element={<RequireAuth roles={ACCOUNTS}><AccountsPage /></RequireAuth>} />
+              <Route path="/accounts/cash-close/:id" element={<RequireAuth roles={ACCOUNTS}><CashCloseDetail /></RequireAuth>} />
+              {/* Pre-2.1 links */}
+              <Route path="/accounts/:id" element={<LegacyCashClose />} />
+              <Route path="/expenses" element={<Navigate to="/accounts/expenses" replace />} />
+              <Route path="/books" element={<Navigate to="/accounts/books" replace />} />
+
+              {/* HR (v2.1) */}
+              <Route path="/hr" element={<RequireAuth roles={['admin', 'coordinator']}><HrToday /></RequireAuth>} />
+              <Route path="/hr/attendance" element={<RequireAuth roles={['admin', 'coordinator']}><AttendanceRegister /></RequireAuth>} />
+              <Route path="/hr/leave" element={<RequireAuth roles={['admin', 'coordinator']}><LeaveRequests /></RequireAuth>} />
+              <Route path="/hr/employees" element={<RequireAuth roles={ACCOUNTS}><EmployeesPage /></RequireAuth>} />
+              <Route path="/hr/payroll" element={<RequireAuth roles={ACCOUNTS}><PayrollPage /></RequireAuth>} />
+              <Route path="/hr/payroll/:id" element={<RequireAuth roles={ACCOUNTS}><PayrollRunDetail /></RequireAuth>} />
+              <Route path="/me" element={<RequireAuth roles={STAFF}><MyHr /></RequireAuth>} />
               <Route path="/inventory" element={<RequireAuth roles={STAFF}><InventoryPage /></RequireAuth>} />
+              <Route path="/assets" element={<RequireAuth roles={STAFF}><AssetsPage /></RequireAuth>} />
+              <Route path="/assets/:id" element={<RequireAuth roles={STAFF}><AssetDetail /></RequireAuth>} />
               <Route path="/reports" element={<RequireAuth roles={STAFF}><ReportsPage /></RequireAuth>} />
               <Route path="/team" element={<RequireAuth roles={['admin', 'coordinator']}><TeamPage /></RequireAuth>} />
               <Route path="/settings" element={<RequireAuth roles={['admin']}><SettingsPage /></RequireAuth>} />
@@ -112,6 +161,7 @@ export default function App() {
               <Route path="/tech/jobs/:id" element={<RequireAuth roles={['technician']}><TechJobDetail /></RequireAuth>} />
               <Route path="/tech/cash" element={<RequireAuth roles={['technician']}><TechCash /></RequireAuth>} />
               <Route path="/tech/parts" element={<RequireAuth roles={['technician']}><TechParts /></RequireAuth>} />
+              <Route path="/tech/me" element={<RequireAuth roles={['technician']}><MyHr /></RequireAuth>} />
 
               <Route path="/admin" element={<RequireAuth roles={['super_admin']}><AdminOverview /></RequireAuth>} />
               <Route path="/admin/tenants" element={<RequireAuth roles={['super_admin']}><TenantsPage /></RequireAuth>} />

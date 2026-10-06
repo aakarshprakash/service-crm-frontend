@@ -1,12 +1,16 @@
 import { useNavigate } from 'react-router';
+import { Store } from 'lucide-react';
+import { useAuth } from '@/auth/AuthProvider';
 import { useListQuery, useStaffOptions } from '@/lib/hooks';
 import { date, money } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 import { Badge, Button, Card, DataTable, EmptyState, FilterBar, Input, PageHeader, Pagination, SearchInput, Select, StatCard } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
+import { Hint } from '@/components/tutorial';
 
 export default function InvoicesPage() {
   const navigate = useNavigate();
+  const { can } = useAuth();
   const list = useListQuery<Invoice>('invoices', '/invoices');
   const { data: techs } = useStaffOptions('technician');
   const f = list.filters;
@@ -14,7 +18,19 @@ export default function InvoicesPage() {
 
   return (
     <>
-      <PageHeader title="Invoices" description="Billing for every job, with offline and online payments." />
+      <PageHeader
+        title="Invoices"
+        description="Billing for every job and walk-in sale, with offline and online payments."
+        actions={
+          can('billing.walkin') && (
+            <Hint text="Bills a customer who came to your service centre: a repair done at the counter or parts sold over the counter. Parts are taken out of stock.">
+              <Button icon={<Store className="h-4 w-4" />} onClick={() => navigate('/invoices/walk-in/new')}>
+                New walk-in bill
+              </Button>
+            </Hint>
+          )
+        }
+      />
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Invoiced (filtered)" value={money(totals?.total ?? 0)} tone="blue" />
         <StatCard label="Received" value={money(totals?.paid ?? 0)} tone="green" />
@@ -29,6 +45,11 @@ export default function InvoicesPage() {
             <option value="partial">Partial</option>
             <option value="unpaid,partial">Unpaid + partial</option>
             <option value="paid">Paid</option>
+          </Select>
+          <Select value={f.source ?? ''} onChange={(e) => list.setFilter('source', e.target.value)} className="sm:w-36" aria-label="Type">
+            <option value="">Jobs + walk-in</option>
+            <option value="job">Job invoices</option>
+            <option value="walk_in">Walk-in bills</option>
           </Select>
           <Select value={f.technician_id ?? ''} onChange={(e) => list.setFilter('technician_id', e.target.value)} className="sm:w-44" aria-label="Technician">
             <option value="">All technicians</option>
@@ -54,7 +75,7 @@ export default function InvoicesPage() {
           rows={list.data?.data}
           loading={list.isFetching}
           onRowClick={(i) => navigate(`/invoices/${i.id}`)}
-          empty={<EmptyState title="No invoices" message="Invoices are created automatically when technicians close visits with charges." />}
+          empty={<EmptyState title="No invoices" message="Job invoices are created automatically when technicians close visits with charges. Walk-in bills are created here." />}
           columns={[
             {
               key: 'no',
@@ -72,7 +93,7 @@ export default function InvoicesPage() {
               render: (i) => (
                 <div>
                   <p>{i.customer?.name}</p>
-                  <p className="text-xs text-slate-500">{i.job?.crm_call_id}</p>
+                  <p className="text-xs text-slate-500">{i.source === 'walk_in' ? 'Walk-in' : i.job?.crm_call_id}</p>
                 </div>
               ),
             },

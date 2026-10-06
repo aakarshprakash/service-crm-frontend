@@ -132,24 +132,41 @@ export interface Payment {
   cash_close_id: number | null;
 }
 
+export interface InvoiceItem {
+  id: number;
+  type: 'service' | 'part';
+  item_id: number | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  item?: { id: number; code: string; name: string; unit_of_measure: string } | null;
+}
+
 export interface Invoice {
   id: number;
-  job_id: number;
+  job_id: number | null;
+  source: 'job' | 'walk_in';
   customer_id: number;
   invoice_number: string;
   total_service_charge: number;
   total_spare_charge: number;
+  discount_amount: number;
   total_amount: number;
   paid_amount: number;
   balance_amount: number;
   payment_status: 'unpaid' | 'partial' | 'paid';
   is_credit: boolean;
+  notes: string | null;
   generated_at: string;
   customer?: Customer;
+  creator?: Named | null;
+  items?: InvoiceItem[];
   job?: { id: number; crm_call_id: string; status?: JobStatus; technician?: Named | null; visits?: Visit[] };
   branch?: Named | null;
   payments?: Payment[];
   pay_link?: string;
+  upi?: { account_id: number; name: string; vpa: string; payee_name: string; amount: number; link: string } | null;
 }
 
 export interface Job {
@@ -158,6 +175,7 @@ export interface Job {
   customer_id: number;
   customer_product_id: number | null;
   branch_id: number | null;
+  service_location_id: number | null;
   complaint_type_id: number | null;
   complaint_summary_id: number | null;
   complaint_details: string | null;
@@ -176,6 +194,7 @@ export interface Job {
   customer?: Customer;
   customer_product?: CustomerProduct | null;
   branch?: Named | null;
+  service_location?: Named | null;
   complaint_type?: Named | null;
   complaint_summary?: Named | null;
   technician?: (Named & { phone?: string }) | null;
@@ -198,6 +217,7 @@ export interface StaffUser {
   status: 'active' | 'inactive' | 'invited';
   branch_id: number | null;
   branch?: Named | null;
+  service_locations?: Named[];
   punch_status: 'in' | 'out';
   last_login_at: string | null;
 }
@@ -224,6 +244,226 @@ export interface Lookups {
   complaint_types: Named[];
   complaint_summaries: { id: number; name: string; complaint_type_id: number | null }[];
   action_taken_options: Named[];
+  expense_categories: Named[];
+  service_locations: { id: number; name: string; city: string | null; pincodes: string | null }[];
+  upi_accounts: UpiAccount[];
+  leave_types: LeaveType[];
+}
+
+export interface UpiAccount {
+  id: number;
+  name: string;
+  vpa: string;
+  payee_name: string;
+  branch_id: number | null;
+  is_default: boolean;
+}
+
+export interface LeaveType {
+  id: number;
+  name: string;
+  code: string | null;
+  annual_quota: number;
+  is_paid: boolean;
+}
+
+export interface LeaveRequest {
+  id: number;
+  user_id: number;
+  leave_type_id: number | null;
+  from_date: string;
+  to_date: string;
+  half_day: boolean;
+  days: number;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  user?: Named & { role?: Role };
+  type?: Named & { code?: string | null };
+  decider?: Named | null;
+}
+
+export interface LeaveBalance {
+  leave_type: { id: number; name: string; code: string | null; is_paid: boolean };
+  quota: number;
+  used: number;
+  pending: number;
+  remaining: number | null;
+}
+
+export type DayStatus = 'present' | 'half_day' | 'absent' | 'leave' | 'unpaid_leave' | 'holiday' | 'weekly_off' | 'not_joined' | 'future';
+
+export interface AttendanceDay {
+  date?: string;
+  status: DayStatus;
+  code: string;
+  in: string | null;
+  out: string | null;
+  minutes: number;
+  outside: boolean;
+  leave_type?: string | null;
+  holiday?: string | null;
+  adjusted: boolean;
+  note?: string | null;
+}
+
+export interface AttendanceSummary {
+  present: number;
+  half_days: number;
+  absent: number;
+  paid_leave: number;
+  unpaid_leave: number;
+  holidays: number;
+  weekly_offs: number;
+  not_joined: number;
+  minutes: number;
+}
+
+export interface SalaryComponent {
+  name: string;
+  type: 'earning' | 'deduction';
+  amount: number;
+}
+
+export interface EmployeeProfile {
+  id: number;
+  user_id: number;
+  employee_code: string | null;
+  designation: string | null;
+  department: string | null;
+  date_of_joining: string | null;
+  date_of_leaving: string | null;
+  monthly_salary: number;
+  components: SalaryComponent[] | null;
+  weekly_offs: number[] | null;
+  bank_name: string | null;
+  bank_account: string | null;
+  ifsc: string | null;
+  pan: string | null;
+  uan: string | null;
+}
+
+export interface Payslip {
+  id: number;
+  payroll_run_id: number;
+  user_id: number;
+  days_in_month: number;
+  working_days: number;
+  present_days: number;
+  paid_leave_days: number;
+  unpaid_leave_days: number;
+  absent_days: number;
+  holidays: number;
+  weekly_offs: number;
+  lop_days: number;
+  gross: number;
+  earnings: { name: string; amount: number }[] | null;
+  deductions: { name: string; amount: number }[] | null;
+  lop_amount: number;
+  bonus: number;
+  other_deduction: number;
+  net_pay: number;
+  note: string | null;
+  user?: Named & { role?: Role; branch?: Named | null };
+  run?: { id: number; month: string; status: string; paid_at: string | null };
+}
+
+export interface PayrollRun {
+  id: number;
+  month: string;
+  status: 'draft' | 'finalized' | 'paid';
+  total_gross: number;
+  total_deductions: number;
+  total_net: number;
+  finalized_at: string | null;
+  paid_at: string | null;
+  payment_method: string | null;
+  created_at: string;
+  payslips_count?: number;
+  creator?: Named | null;
+  payslips?: Payslip[];
+}
+
+export type AssetStatus = 'available' | 'assigned' | 'under_repair' | 'lost' | 'retired';
+export type AssetCondition = 'new' | 'good' | 'fair' | 'poor' | 'damaged';
+
+export interface Asset {
+  id: number;
+  asset_code: string;
+  name: string;
+  category: 'tool' | 'vehicle' | 'device' | 'equipment' | 'other';
+  brand: string | null;
+  model: string | null;
+  serial_no: string | null;
+  purchase_date: string | null;
+  purchase_cost: number | null;
+  warranty_expiry: string | null;
+  branch_id: number | null;
+  status: AssetStatus;
+  condition: AssetCondition;
+  assigned_to: number | null;
+  notes: string | null;
+  holder?: (Named & { phone?: string | null }) | null;
+  branch?: Named | null;
+  assignments?: {
+    id: number;
+    user?: Named;
+    issuer?: Named | null;
+    receiver?: Named | null;
+    issued_at: string;
+    issue_condition: string | null;
+    issue_notes: string | null;
+    returned_at: string | null;
+    return_condition: string | null;
+    return_notes: string | null;
+  }[];
+}
+
+export type ExpenseMethod = 'cash' | 'upi' | 'cheque' | 'bank_transfer';
+
+export interface Expense {
+  id: number;
+  expense_date: string;
+  expense_category_id: number | null;
+  amount: number;
+  payment_method: ExpenseMethod;
+  paid_to: string | null;
+  reference_no: string | null;
+  description: string | null;
+  branch_id: number | null;
+  user_id: number | null;
+  created_at: string;
+  category?: Named | null;
+  branch?: Named | null;
+  user?: Named | null;
+  creator?: Named | null;
+}
+
+export interface BooksSummary {
+  from: string;
+  to: string;
+  income: number;
+  expense: number;
+  net: number;
+  income_by_method: Record<string, number>;
+  income_by_source: { job: number; walk_in: number };
+  expense_by_method: Record<string, number>;
+  expense_by_category: Record<string, number>;
+  cash: { in: number; out: number; net: number };
+  series: { date: string; income: number; expense: number }[];
+}
+
+export interface DayBookRow {
+  at: string;
+  kind: string;
+  ref: string | null;
+  party: string | null;
+  details: string | null;
+  method: string;
+  in: number;
+  out: number;
 }
 
 export interface CashClose {

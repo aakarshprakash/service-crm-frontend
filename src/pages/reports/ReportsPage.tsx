@@ -14,7 +14,7 @@ import { Hint } from '@/components/tutorial';
 interface ReportMeta { key: string; title: string; description: string; financial: boolean }
 interface ExportRow { id: number; title: string; format: string; status: string; created_at: string; error: string | null }
 
-const NEEDS_DATES = new Set(['jobs', 'technician-performance', 'revenue', 'cash-collection', 'cash-close', 'inventory-consumption', 'detailed-summary']);
+const NEEDS_DATES = new Set(['jobs', 'technician-performance', 'revenue', 'cash-collection', 'cash-close', 'inventory-consumption', 'detailed-summary', 'expenses', 'profit-loss', 'day-book', 'walk-in-sales']);
 
 export default function ReportsPage() {
   const [params, setParams] = useSearchParams();

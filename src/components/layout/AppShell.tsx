@@ -3,9 +3,11 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, Boxes, Building2, ClipboardList, CreditCard, FileBarChart, Gauge, Home, LayoutDashboard, LogOut, Menu, Package,
-  Receipt, Settings, ShieldCheck, UserCircle, Users, Wallet, WifiOff, Wrench, X,
+  Bell, Boxes, Building2, CalendarCheck, ChevronDown, ClipboardList, CreditCard, FileBarChart, Gauge, Hammer, Home, Landmark, LayoutDashboard, LogIn, LogOut,
+  Menu, Package, Receipt, Settings, ShieldCheck, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
 } from 'lucide-react';
+import { APP_VERSION, WhatsNew, useWhatsNew } from '@/components/whatsNew';
+import { getPosition } from '@/lib/utils';
 import { useAuth } from '@/auth/AuthProvider';
 import { api, setToken, type Paginated } from '@/lib/api';
 import { relative } from '@/lib/format';
@@ -21,6 +23,8 @@ interface NavItem {
   icon: ReactNode;
   show: boolean;
   end?: boolean;
+  /** Sub-menu: the item becomes an expandable group heading. */
+  children?: { to: string; label: string; show: boolean; end?: boolean }[];
 }
 
 function useNav(): NavItem[] {
@@ -42,19 +46,82 @@ function useNav(): NavItem[] {
       { to: '/tech/jobs', label: t('nav.myJobs'), icon: i(ClipboardList), show: true },
       { to: '/tech/cash', label: t('nav.myCash'), icon: i(Wallet), show: true },
       { to: '/tech/parts', label: t('nav.parts'), icon: i(Package), show: true },
+      { to: '/tech/me', label: t('nav.me'), icon: i(CalendarCheck), show: true },
     ];
   }
+  const accounts = can('accounts.view');
   return [
     { to: '/dashboard', label: t('nav.dashboard'), icon: i(LayoutDashboard), show: can('dashboard.view') },
     { to: '/jobs', label: t('nav.jobs'), icon: i(Wrench), show: can('jobs.view') },
     { to: '/customers', label: t('nav.customers'), icon: i(Users), show: can('customers.view') },
     { to: '/invoices', label: t('nav.invoices'), icon: i(Receipt), show: can('invoices.view') },
-    { to: '/accounts', label: t('nav.accounts'), icon: i(Wallet), show: can('cash.verify') },
+    {
+      to: '/accounts',
+      label: t('nav.accounts'),
+      icon: i(Landmark),
+      show: accounts || can('cash.verify'),
+      children: [
+        { to: '/accounts', label: 'Overview', show: accounts, end: true },
+        { to: '/accounts/receivables', label: 'Receivables', show: accounts },
+        { to: '/accounts/receipts', label: 'Receipts', show: can('payments.record') },
+        { to: '/accounts/expenses', label: t('nav.expenses'), show: can('expenses.manage') },
+        { to: '/accounts/cash-bank', label: 'Cash & bank', show: accounts },
+        { to: '/accounts/books', label: 'Day book', show: accounts },
+        { to: '/accounts/profit-loss', label: 'Profit & loss', show: accounts },
+        { to: '/accounts/cash-close', label: 'Technician cash close', show: can('cash.verify') },
+      ],
+    },
     { to: '/inventory', label: t('nav.inventory'), icon: i(Boxes), show: can('inventory.view') },
+    { to: '/assets', label: t('nav.assets'), icon: i(Hammer), show: can('assets.view') },
+    {
+      to: '/hr',
+      label: t('nav.hr'),
+      icon: i(UsersRound),
+      show: can('hr.view') || can('leave.approve') || can('payroll.manage'),
+      children: [
+        { to: '/hr', label: 'Today', show: can('hr.view'), end: true },
+        { to: '/hr/attendance', label: 'Attendance register', show: can('hr.view') },
+        { to: '/hr/leave', label: 'Leave requests', show: can('leave.approve') },
+        { to: '/hr/employees', label: 'Employees & salary', show: can('payroll.manage') },
+        { to: '/hr/payroll', label: 'Payroll', show: can('payroll.manage') },
+      ],
+    },
+    { to: '/me', label: t('nav.me'), icon: i(CalendarCheck), show: can('self.service') },
     { to: '/reports', label: t('nav.reports'), icon: i(FileBarChart), show: can('reports.view') },
     { to: '/team', label: t('nav.team'), icon: i(ShieldCheck), show: can('users.view') },
     { to: '/settings', label: t('nav.settings'), icon: i(Settings), show: can('settings.manage') },
   ];
+}
+
+const linkClass = (isActive: boolean) =>
+  cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors', isActive ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white');
+
+function NavGroup({ item }: { item: NavItem }) {
+  const location = useLocation();
+  const inside = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+  const [open, setOpen] = useState(inside);
+  useEffect(() => {
+    if (inside) setOpen(true);
+  }, [inside]);
+  const children = item.children!.filter((c) => c.show);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={cn(linkClass(false), 'w-full', inside && 'text-white')}>
+        {item.icon}
+        <span className="flex-1 text-left">{item.label}</span>
+        <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="mb-1 ml-[1.35rem] mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
+          {children.map((c) => (
+            <NavLink key={c.to} to={c.to} end={c.end} className={({ isActive }) => cn('block rounded-md px-3 py-1.5 text-[13px] transition-colors', isActive ? 'bg-white/10 font-medium text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white')}>
+              {c.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AppShell() {
@@ -65,6 +132,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const online = useOnline();
   const isTech = user?.role === 'technician';
+  const [showNews, setShowNews] = useWhatsNew(user?.role !== 'super_admin' && !!user);
 
   useEffect(() => setOpen(false), [location.pathname]);
 
@@ -87,28 +155,25 @@ export function AppShell() {
           <Wrench className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">{user?.tenant?.name ?? 'ServiceCRM'}</p>
+          <p className="truncate text-sm font-semibold text-white">{user?.tenant?.name ?? 'Servon'}</p>
           <p className="truncate text-[11px] text-slate-400">{user?.role_label}</p>
         </div>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-        {nav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white',
-              )
-            }
-          >
-            {item.icon}
-            {item.label}
-          </NavLink>
-        ))}
+        {nav.map((item) =>
+          item.children ? (
+            <NavGroup key={item.to} item={item} />
+          ) : (
+            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => linkClass(isActive)}>
+              {item.icon}
+              {item.label}
+            </NavLink>
+          ),
+        )}
       </nav>
+      <button type="button" onClick={() => setShowNews(true)} className="px-5 pb-2 text-left text-[11px] text-slate-500 hover:text-slate-300">
+        Servon v{APP_VERSION} · What’s new
+      </button>
       <div className="border-t border-white/10 p-3">
         <Link to="/profile" className="flex items-center gap-3 rounded-lg px-2 py-2 text-slate-300 hover:bg-white/5 hover:text-white">
           <Avatar name={user?.name ?? '?'} />
@@ -168,6 +233,7 @@ export function AppShell() {
             <GlobalSearch />
           )}
           <div className="ml-auto flex items-center gap-1">
+            {!isTech && user?.role !== 'super_admin' && user?.abilities.includes('punch') && <PunchButton />}
             {user?.role !== 'super_admin' && <NotificationBell />}
             <Button variant="ghost" size="sm" onClick={logout} icon={<LogOut className="h-4 w-4" />} className="hidden sm:inline-flex">
               Sign out
@@ -183,7 +249,7 @@ export function AppShell() {
 
       {/* Technician bottom tab bar (mobile) */}
       {isTech && (
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
           {nav.map((item) => (
             <NavLink
               key={item.to}
@@ -197,7 +263,33 @@ export function AppShell() {
           ))}
         </nav>
       )}
+      <WhatsNew open={showNews} onClose={() => setShowNews(false)} />
     </div>
+  );
+}
+
+/** Office staff punch in / out from the header (geo-fenced when the company turns it on). */
+function PunchButton() {
+  const { user, refresh } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const on = user?.punch_status === 'in';
+  const punch = async () => {
+    setBusy(true);
+    try {
+      const pos = await getPosition(8000).catch(() => null); // the server decides whether location is required
+      const res = await api.post<{ message?: string }>('/punch', { type: on ? 'out' : 'in', source: 'web', ...(pos ?? {}) });
+      toast.success(res.message ?? 'Done.');
+      await refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button size="sm" variant={on ? 'secondary' : 'success'} loading={busy} icon={on ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />} onClick={punch} className="whitespace-nowrap">
+      <span className="hidden sm:inline">{on ? 'Punch out' : 'Punch in'}</span>
+    </Button>
   );
 }
 
@@ -249,6 +341,7 @@ function NotificationBell() {
     if (jobId) navigate(user?.role === 'technician' ? `/tech/jobs/${jobId}` : `/jobs/${jobId}`);
     else if (n.type === 'low_stock') navigate('/inventory?tab=stock&low_stock=1');
     else if (n.type === 'export_ready') navigate('/reports?exports=1');
+    else if (n.type === 'asset_issued') navigate(user?.role === 'technician' ? '/tech' : `/assets/${n.data?.asset_id}`);
     api.post('/notifications/read', { ids: [n.id] }).then(() => qc.invalidateQueries({ queryKey: ['my-notifications'] })).catch(() => toast.error('Could not update notification'));
   };
 

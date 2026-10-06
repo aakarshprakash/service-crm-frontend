@@ -26,14 +26,14 @@ export async function compressImage(file: File, maxSide = 1600, quality = 0.8): 
   return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
 }
 
-export function getPosition(timeoutMs = 10000): Promise<{ lat: number; lng: number }> {
+export function getPosition(timeoutMs = 10000): Promise<{ lat: number; lng: number; accuracy: number }> {
   return new Promise((resolve, reject) => {
     if (!('geolocation' in navigator)) {
       reject(new Error('Location is not supported on this device.'));
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: +pos.coords.latitude.toFixed(7), lng: +pos.coords.longitude.toFixed(7) }),
+      (pos) => resolve({ lat: +pos.coords.latitude.toFixed(7), lng: +pos.coords.longitude.toFixed(7), accuracy: Math.round(pos.coords.accuracy) }),
       (err) =>
         reject(
           new Error(

@@ -124,6 +124,7 @@ export default function JobDetail() {
                     ['Service type', label(job.service_type)],
                     ['Scheduled', dateTime(job.scheduled_at)],
                     ['Branch', job.branch?.name ?? '—'],
+                    ['Service location', job.service_location?.name ?? '—'],
                   ]}
                 />
                 {job.complaint_details && <p className="mt-4 whitespace-pre-line rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{job.complaint_details}</p>}
@@ -292,6 +293,7 @@ function AssignDialog({ job, open, onClose }: { job: Job; open: boolean; onClose
   const [tech, setTech] = useState(String(job.assigned_technician_id ?? ''));
   const [when, setWhen] = useState(toLocalInput(job.scheduled_at));
   const m = useApiMutation((body: object) => api.patch(`/jobs/${job.id}/assign`, body), { invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
+  const auto = useApiMutation(() => api.post(`/jobs/${job.id}/auto-assign`), { invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
   return (
     <Modal
       open={open}
@@ -303,6 +305,11 @@ function AssignDialog({ job, open, onClose }: { job: Job; open: boolean; onClose
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
+          <Hint text="Picks the technician linked to this job’s service location (or its branch, if it has no location) who has the fewest open jobs.">
+            <Button variant="secondary" loading={auto.isPending} onClick={() => auto.mutate(undefined)}>
+              Auto-assign
+            </Button>
+          </Hint>
           <Button loading={m.isPending} disabled={!tech} onClick={() => m.mutate({ technician_id: Number(tech), scheduled_at: fromLocalInput(when) })}>
             Assign
           </Button>

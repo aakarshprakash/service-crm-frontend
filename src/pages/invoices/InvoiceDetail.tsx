@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Copy, Download, HandCoins, Send } from 'lucide-react';
+import { ArrowLeft, Copy, Download, HandCoins, QrCode, Send } from 'lucide-react';
+import { UpiQrDialog } from '@/components/upi';
 import { api, download, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation } from '@/lib/hooks';
@@ -16,6 +17,7 @@ export default function InvoiceDetail() {
   const { can, user } = useAuth();
   const q = useQuery({ queryKey: ['invoice', id], queryFn: () => api.get<Envelope<Invoice>>(`/invoices/${id}`).then((r) => r.data) });
   const [paying, setPaying] = useState(false);
+  const [showUpi, setShowUpi] = useState(false);
   const remind = useApiMutation(() => api.post<{ message: string }>(`/invoices/${id}/remind`));
   const inv = q.data;
   const back = user?.role === 'technician' ? `/tech/jobs/${inv?.job_id ?? ''}` : '/invoices';
@@ -36,7 +38,11 @@ export default function InvoiceDetail() {
                 {inv.invoice_number} <StatusBadge status={inv.payment_status} /> {inv.is_credit && inv.balance_amount > 0 && <Badge tone="violet">Credit</Badge>}
               </span>
             }
-            description={`Generated ${date(inv.generated_at)} · Job ${inv.job?.crm_call_id}`}
+            description={
+              inv.source === 'walk_in'
+                ? `Walk-in bill · ${date(inv.generated_at)}${inv.creator ? ` · billed by ${inv.creator.name}` : ''}${inv.branch ? ` · ${inv.branch.name}` : ''}`
+                : `Generated ${date(inv.generated_at)} · Job ${inv.job?.crm_call_id}`
+            }
             actions={
               <>
                 <Hint text="Downloads the invoice as a PDF, with your company details and logo, to print or share.">
@@ -61,6 +67,13 @@ export default function InvoiceDetail() {
                       </Button>
                     </Hint>
                   </>
+                )}
+                {inv.balance_amount > 0 && (
+                  <Hint text="Shows a UPI QR code for the balance. The customer scans it with any UPI app; record the payment once it’s credited.">
+                    <Button variant="secondary" icon={<QrCode className="h-4 w-4" />} onClick={() => setShowUpi(true)}>
+                      UPI QR
+                    </Button>
+                  </Hint>
                 )}
                 {canCollect && (
                   <Hint text="Records money received for this invoice by cash, UPI, cheque or bank transfer. A receipt number is created and the balance goes down straight away.">
@@ -88,10 +101,23 @@ export default function InvoiceDetail() {
                     {inv.job?.visits?.map((v) => (
                       <VisitRows key={v.id} v={v} />
                     ))}
+                    {inv.items?.map((it) => (
+                      <tr key={it.id}>
+                        <td className="px-5 py-2.5">
+                          {it.description}
+                          {it.type === 'part' && <span className="text-xs text-slate-500"> @ {money(it.unit_price)}</span>}
+                        </td>
+                        <td className="px-5 py-2.5 text-right">
+                          {qty(it.quantity)} {it.item?.unit_of_measure}
+                        </td>
+                        <td className="px-5 py-2.5 text-right tabular-nums">{money(it.total)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                   <tfoot className="border-t border-slate-200 text-sm">
                     <Tot k="Total service charge" v={inv.total_service_charge} />
                     <Tot k="Total spare charge" v={inv.total_spare_charge} />
+                    {inv.discount_amount > 0 && <Tot k="Discount" v={-inv.discount_amount} />}
                     <Tot k="Total" v={inv.total_amount} bold />
                     <Tot k="Paid" v={inv.paid_amount} />
                     <Tot k="Balance due" v={inv.balance_amount} bold red={inv.balance_amount > 0} />
@@ -120,15 +146,21 @@ export default function InvoiceDetail() {
                 <p className="font-medium">{inv.customer?.name}</p>
                 <p className="text-sm text-slate-600">{inv.customer?.phone}</p>
                 <p className="text-sm text-slate-600">{[inv.customer?.address, inv.customer?.city].filter(Boolean).join(', ')}</p>
-                {user?.role !== 'technician' && (
+                {user?.role !== 'technician' && inv.job_id && (
                   <Link to={`/jobs/${inv.job_id}`} className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline">
                     View job {inv.job?.crm_call_id} →
                   </Link>
                 )}
               </Card>
+              {inv.notes && (
+                <Card title="Notes">
+                  <p className="whitespace-pre-line text-sm text-slate-700">{inv.notes}</p>
+                </Card>
+              )}
             </div>
           </div>
           <RecordPayment invoice={inv} open={paying} onClose={() => setPaying(false)} technician={user?.role === 'technician'} />
+          <UpiQrDialog open={showUpi} onClose={() => setShowUpi(false)} amount={inv.balance_amount} note={`Invoice ${inv.invoice_number}`} branchId={inv.branch?.id} />
         </>
       )}
     </QueryState>

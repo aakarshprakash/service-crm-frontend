@@ -2,8 +2,9 @@ import { useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Building2, Camera, CheckCircle2, ChevronDown, HandCoins, MapPin, MapPinOff, MessageCircle, Minus, Navigation, Phone, PhoneCall, Plus, Search, Timer, Trash2, Wrench,
+  ArrowLeft, Building2, Camera, CheckCircle2, ChevronDown, HandCoins, MapPin, MapPinOff, MessageCircle, Minus, Navigation, Phone, PhoneCall, Plus, QrCode, Search, Timer, Trash2, Wrench,
 } from 'lucide-react';
+import { UpiQrDialog } from '@/components/upi';
 import { api, ApiError, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useLookups, useNow, useStaffOptions } from '@/lib/hooks';
@@ -623,6 +624,7 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
     payment_reference: '',
   });
   const [confirming, setConfirming] = useState(false);
+  const [showUpi, setShowUpi] = useState(false);
   const total = toMinor(form.labour_charge) + toMinor(form.spare_charge);
   const due = total + previousBalance;
   const collects = ['cash', 'upi', 'cheque', 'bank_transfer'].includes(form.payment_method);
@@ -756,8 +758,14 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
                     <Input value={form.payment_reference} onChange={(ev) => setForm({ ...form, payment_reference: ev.target.value })} />
                   </Field>
                 )}
+                {form.payment_method === 'upi' && collected > 0 && (
+                  <Button variant="secondary" className="col-span-2" icon={<QrCode className="h-4 w-4" />} onClick={() => setShowUpi(true)}>
+                    Show UPI QR to customer
+                  </Button>
+                )}
               </div>
             )}
+            <UpiQrDialog open={showUpi} onClose={() => setShowUpi(false)} amount={collected} note={`Job ${job.crm_call_id}`} branchId={job.branch_id} title="Customer scans to pay" />
           </>
         )}
 

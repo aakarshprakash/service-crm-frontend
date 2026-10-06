@@ -4,9 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { api, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hooks';
-import { dateTime, label, money } from '@/lib/format';
+import { fieldError, useApiMutation, useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
+import { date, dateTime, label, money } from '@/lib/format';
+import { getPosition } from '@/lib/utils';
 import type { Named } from '@/lib/types';
+import { UpiQr, upiLink } from '@/components/upi';
 import { Badge, Button, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, QueryState, SearchInput, Select, Tabs, Textarea, Toggle, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 
@@ -24,6 +26,9 @@ interface SettingsData {
     strict_cash_close: boolean;
     customer_portal: boolean;
     tutorial_mode: boolean;
+    auto_assign_max_jobs: number;
+    auto_assign_on_duty_only: boolean;
+    attendance: { geofence: 'off' | 'flag' | 'enforce'; geofence_technicians: boolean; require_location: boolean };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -233,6 +238,70 @@ function Preferences({ data }: { data: SettingsData }) {
           Example: {s.job_prefix}-2609-00042 · {s.invoice_prefix}-2609-00042
         </p>
       </Card>
+      <Card title="Automatic job assignment" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
+        <p className="text-sm text-slate-500">
+          Auto-assign gives a job to the technician linked to its service location who has the fewest open jobs. Link technicians to locations in Master data → Service locations.
+        </p>
+        <div className="divide-y divide-slate-100">
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Maximum open jobs per technician</p>
+              <p className="text-sm text-slate-500">Technicians with this many open jobs are skipped.</p>
+              {e('auto_assign_max_jobs') && <p className="mt-1 text-xs text-red-600">{e('auto_assign_max_jobs')}</p>}
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={500}
+              className="w-24"
+              aria-label="Maximum open jobs per technician"
+              value={s.auto_assign_max_jobs ?? 10}
+              onChange={(ev) => setS({ ...s, auto_assign_max_jobs: Number(ev.target.value) })}
+            />
+          </div>
+          <Row
+            title="Only technicians on duty"
+            desc="Only pick technicians who have punched in. When off, on-duty technicians are still preferred on a tie."
+            checked={!!s.auto_assign_on_duty_only}
+            onChange={(v) => setS({ ...s, auto_assign_on_duty_only: v })}
+          />
+        </div>
+      </Card>
+      <Card title="Attendance & geofence" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
+        <p className="text-sm text-slate-500">
+          Staff punch in and out from the web or the mobile app. Set each branch’s location and radius in Master data → Branches.
+        </p>
+        <div className="divide-y divide-slate-100">
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Geofence</p>
+              <p className="text-sm text-slate-500">Flag: allow punches from anywhere but mark ones outside the branch radius. Block: refuse them.</p>
+            </div>
+            <Select
+              className="w-40"
+              aria-label="Geofence mode"
+              value={s.attendance?.geofence ?? 'off'}
+              onChange={(ev) => setS({ ...s, attendance: { ...s.attendance, geofence: ev.target.value as 'off' | 'flag' | 'enforce' } })}
+            >
+              <option value="off">Off</option>
+              <option value="flag">Flag outside</option>
+              <option value="enforce">Block outside</option>
+            </Select>
+          </div>
+          <Row
+            title="Apply geofence to technicians"
+            desc="Field technicians usually start from customer sites, so they are exempt unless you turn this on."
+            checked={!!s.attendance?.geofence_technicians}
+            onChange={(v) => setS({ ...s, attendance: { ...s.attendance, geofence_technicians: v } })}
+          />
+          <Row
+            title="Require location to punch"
+            desc="Refuse punches when the phone or browser doesn’t share its location."
+            checked={!!s.attendance?.require_location}
+            onChange={(v) => setS({ ...s, attendance: { ...s.attendance, require_location: v } })}
+          />
+        </div>
+      </Card>
       <Card title="Onboarding" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
         <div className="divide-y divide-slate-100">
           <Row
@@ -256,9 +325,16 @@ const MASTER_TYPES = [
   { key: 'products', label: 'Products / models', hint: '' },
   { key: 'dealers', label: 'Dealers', hint: '' },
   { key: 'branches', label: 'Branches', hint: 'Service centres / warehouses holding stock.' },
+  { key: 'service-locations', label: 'Service locations', hint: 'Areas you serve. Link technicians to each one so new jobs there can be auto-assigned.' },
+  { key: 'expense-categories', label: 'Expense categories', hint: 'Heads for recording expenses, e.g. Fuel, Rent, Salaries.' },
+  { key: 'upi-accounts', label: 'UPI accounts', hint: 'UPI IDs you collect into. They are printed as a “scan to pay” QR on invoices and shown to technicians when collecting.' },
+  { key: 'leave-types', label: 'Leave types', hint: 'Types of leave staff can apply for, with a yearly quota (0 = not tracked). Unpaid leave is deducted in payroll.' },
+  { key: 'holidays', label: 'Holidays', hint: 'Company holidays. They are paid days off and not counted against leave.' },
 ] as const;
 
-type MasterRow = Named & { is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null };
+type MasterRow = Named & { is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null; pincodes?: string | null; technicians?: Named[]; technicians_count?: number;
+  vpa?: string; payee_name?: string; is_default?: boolean; branch_id?: number | null; branch?: Named | null;
+  annual_quota?: number; is_paid?: boolean; date?: string; lat?: number | null; lng?: number | null; geofence_radius?: number | null };
 
 function MasterData() {
   const [type, setType] = useState<(typeof MASTER_TYPES)[number]['key']>('action-taken-options');
@@ -301,7 +377,37 @@ function MasterData() {
             ...(type === 'products' ? [{ key: 'brand', header: 'Brand / category', render: (r: MasterRow) => [r.brand?.name, r.category?.name].filter(Boolean).join(' · ') || '—' }] : []),
             ...(type === 'complaint-summaries' ? [{ key: 'ct', header: 'Complaint type', render: (r: MasterRow) => r.complaint_type?.name ?? '—' }] : []),
             ...(type === 'dealers' ? [{ key: 'c', header: 'Contact', render: (r: MasterRow) => [r.contact, r.phone].filter(Boolean).join(' · ') || '—' }] : []),
-            ...(type === 'branches' ? [{ key: 'city', header: 'City', render: (r: MasterRow) => r.city ?? '—' }] : []),
+            ...(type === 'branches'
+              ? [
+                  { key: 'city', header: 'City', render: (r: MasterRow) => r.city ?? '—' },
+                  { key: 'fence', header: 'Geofence', render: (r: MasterRow) => (r.lat != null && r.geofence_radius ? <span className="text-sm">{r.geofence_radius} m</span> : <span className="text-xs text-slate-400">Not set</span>) },
+                ]
+              : []),
+            ...(type === 'upi-accounts'
+              ? [
+                  { key: 'vpa', header: 'UPI ID', render: (r: MasterRow) => <span className="font-mono text-sm">{r.vpa}</span> },
+                  { key: 'payee', header: 'Payee / branch', render: (r: MasterRow) => <span className="text-sm">{r.payee_name}{r.branch && <span className="block text-xs text-slate-500">{r.branch.name}</span>}</span> },
+                  { key: 'def', header: '', render: (r: MasterRow) => (r.is_default ? <Badge tone="blue">Default</Badge> : null) },
+                ]
+              : []),
+            ...(type === 'leave-types'
+              ? [
+                  { key: 'quota', header: 'Days / year', render: (r: MasterRow) => (r.annual_quota ? r.annual_quota : '—') },
+                  { key: 'paid', header: 'Pay', render: (r: MasterRow) => <Badge tone={r.is_paid ? 'green' : 'amber'}>{r.is_paid ? 'Paid' : 'Unpaid'}</Badge> },
+                ]
+              : []),
+            ...(type === 'holidays' ? [{ key: 'date', header: 'Date', render: (r: MasterRow) => date(r.date) }] : []),
+            ...(type === 'service-locations'
+              ? [
+                  { key: 'city', header: 'City / PIN codes', render: (r: MasterRow) => <span className="text-sm">{r.city ?? '—'}{r.pincodes && <span className="block max-w-xs truncate text-xs text-slate-500">{r.pincodes}</span>}</span> },
+                  {
+                    key: 'techs',
+                    header: 'Technicians',
+                    render: (r: MasterRow) =>
+                      r.technicians?.length ? <span className="text-sm">{r.technicians.map((t) => t.name).join(', ')}</span> : <span className="text-xs text-amber-700">None – jobs here can’t be auto-assigned</span>,
+                  },
+                ]
+              : []),
             { key: 'active', header: 'Status', render: (r) => <Badge tone={r.is_active ? 'green' : 'slate'}>{r.is_active ? 'Active' : 'Inactive'}</Badge> },
             {
               key: 'act',
@@ -349,15 +455,49 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
     code: row?.code ?? '',
     city: row?.city ?? '',
     address: row?.address ?? '',
+    pincodes: row?.pincodes ?? '',
+    vpa: row?.vpa ?? '',
+    payee_name: row?.payee_name ?? '',
+    branch_id: String(row?.branch_id ?? ''),
+    is_default: row?.is_default ?? false,
+    annual_quota: String(row?.annual_quota ?? ''),
+    is_paid: row?.is_paid ?? true,
+    date: row?.date ?? '',
+    lat: row?.lat != null ? String(row.lat) : '',
+    lng: row?.lng != null ? String(row.lng) : '',
+    geofence_radius: row?.geofence_radius ? String(row.geofence_radius) : '',
     is_active: row?.is_active ?? true,
   });
+  const [locating, setLocating] = useState(false);
+  const useMyLocation = async () => {
+    setLocating(true);
+    try {
+      const pos = await getPosition(10000);
+      setForm((f) => ({ ...f, lat: String(pos.lat), lng: String(pos.lng), geofence_radius: f.geofence_radius || '200' }));
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLocating(false);
+    }
+  };
+  const { data: techs } = useStaffOptions('technician');
+  const [techIds, setTechIds] = useState<number[]>(row?.technicians?.map((t) => t.id) ?? []);
   const body = () => {
     const base: Record<string, unknown> = { is_active: form.is_active };
     if (type === 'products') Object.assign(base, { model_name: form.model_name, brand_id: form.brand_id || null, category_id: form.category_id || null });
     else base.name = form.name;
     if (type === 'complaint-summaries') base.complaint_type_id = form.complaint_type_id || null;
     if (type === 'dealers') Object.assign(base, { contact: form.contact || null, phone: form.phone || null });
-    if (type === 'branches') Object.assign(base, { code: form.code || null, city: form.city || null, address: form.address || null, phone: form.phone || null });
+    if (type === 'branches')
+      Object.assign(base, {
+        code: form.code || null, city: form.city || null, address: form.address || null, phone: form.phone || null,
+        lat: form.lat === '' ? null : Number(form.lat), lng: form.lng === '' ? null : Number(form.lng),
+        geofence_radius: form.geofence_radius === '' ? null : Number(form.geofence_radius),
+      });
+    if (type === 'upi-accounts') Object.assign(base, { vpa: String(form.vpa).trim(), payee_name: form.payee_name, branch_id: form.branch_id || null, is_default: form.is_default });
+    if (type === 'leave-types') Object.assign(base, { code: form.code || null, annual_quota: form.annual_quota === '' ? 0 : Number(form.annual_quota), is_paid: form.is_paid });
+    if (type === 'holidays') base.date = form.date;
+    if (type === 'service-locations') Object.assign(base, { code: form.code || null, city: form.city || null, pincodes: form.pincodes || null, technician_ids: techIds });
     return base;
   };
   const m = useApiMutation(() => (row ? api.patch(`/master/${type}/${row.id}`, body()) : api.post(`/master/${type}`, body())), { invalidate: [['master'], ['lookups']], toastValidation: false, onSuccess: onClose, success: 'Saved.' });
@@ -406,12 +546,95 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
           </div>
         )}
         {type === 'branches' && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {text('code', 'Code')}
-            {text('city', 'City')}
-            {text('phone', 'Phone')}
-            {text('address', 'Address')}
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {text('code', 'Code')}
+              {text('city', 'City')}
+              {text('phone', 'Phone')}
+              {text('address', 'Address')}
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Attendance geofence</p>
+                  <p className="text-xs text-slate-500">Staff of this branch punch in within this distance of the office. Turn it on in Preferences.</p>
+                </div>
+                <Button size="sm" variant="secondary" loading={locating} onClick={useMyLocation}>
+                  Use my location
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {text('lat', 'Latitude')}
+                {text('lng', 'Longitude')}
+                {text('geofence_radius', 'Radius (m)')}
+              </div>
+            </div>
+          </>
+        )}
+        {type === 'upi-accounts' && (
+          <>
+            <Field label="UPI ID" required error={e('vpa')} hint="As shown in your bank / UPI app, e.g. servon@okhdfcbank">
+              <Input value={String(form.vpa)} onChange={(ev) => setForm({ ...form, vpa: ev.target.value })} placeholder="name@bank" />
+            </Field>
+            <Field label="Payee name" required error={e('payee_name')} hint="The account holder name customers see when they scan.">
+              <Input value={String(form.payee_name)} onChange={(ev) => setForm({ ...form, payee_name: ev.target.value })} />
+            </Field>
+            {(lookups?.branches.length ?? 0) > 1 && (
+              <Field label="Branch" hint="Optional: use this UPI ID for one branch’s invoices.">
+                <Select value={String(form.branch_id)} onChange={(ev) => setForm({ ...form, branch_id: ev.target.value })}>
+                  <option value="">All branches</option>
+                  {lookups?.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </Select>
+              </Field>
+            )}
+            <Checkbox label="Default UPI account" checked={Boolean(form.is_default)} onChange={(v) => setForm({ ...form, is_default: v })} />
+            {form.vpa && form.payee_name && (
+              <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+                <UpiQr link={upiLink({ vpa: String(form.vpa), payee_name: String(form.payee_name) }, 100, 'Test')} size={96} />
+                <p className="text-xs text-slate-600">Scan this test QR (₹1) with your phone to check the UPI ID before saving.</p>
+              </div>
+            )}
+          </>
+        )}
+        {type === 'leave-types' && (
+          <div className="grid grid-cols-2 gap-4">
+            {text('code', 'Short code')}
+            <Field label="Days per year" error={e('annual_quota')} hint="0 = not limited">
+              <Input inputMode="decimal" value={String(form.annual_quota)} onChange={(ev) => setForm({ ...form, annual_quota: ev.target.value.replace(/[^\d.]/g, '') })} />
+            </Field>
+            <div className="col-span-2">
+              <Checkbox label="Paid leave" description="Unpaid leave is deducted from salary as loss of pay." checked={Boolean(form.is_paid)} onChange={(v) => setForm({ ...form, is_paid: v })} />
+            </div>
           </div>
+        )}
+        {type === 'holidays' && (
+          <Field label="Date" required error={e('date')}>
+            <Input type="date" value={String(form.date)} onChange={(ev) => setForm({ ...form, date: ev.target.value })} />
+          </Field>
+        )}
+        {type === 'service-locations' && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {text('code', 'Code')}
+              {text('city', 'City')}
+            </div>
+            <Field label="PIN codes covered" error={e('pincodes')} hint="Separate with commas or spaces. Used to suggest this location for a customer.">
+              <Textarea rows={2} value={String(form.pincodes)} onChange={(ev) => setForm({ ...form, pincodes: ev.target.value })} />
+            </Field>
+            <Field label="Technicians who cover this location" error={e('technician_ids')}>
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                {!techs?.length && <p className="px-1 py-2 text-sm text-slate-500">No technicians yet.</p>}
+                {techs?.map((t) => (
+                  <Checkbox
+                    key={t.id}
+                    label={t.name}
+                    checked={techIds.includes(t.id)}
+                    onChange={(v) => setTechIds((ids) => (v ? [...ids, t.id] : ids.filter((i) => i !== t.id)))}
+                  />
+                ))}
+              </div>
+            </Field>
+          </>
         )}
         <Checkbox label="Active" checked={Boolean(form.is_active)} onChange={(v) => setForm({ ...form, is_active: v })} />
       </div>

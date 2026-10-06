@@ -18,7 +18,7 @@ export function AuthLayout({ title, subtitle, children, footer, brand }: { title
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600">
               <Wrench className="h-5 w-5" />
             </div>
-            <span className="text-lg font-semibold">{brand ?? 'ServiceCRM'}</span>
+            <span className="text-lg font-semibold">{brand ?? 'Servon'}</span>
           </div>
           <div className="max-w-md">
             <h2 className="text-3xl font-semibold leading-tight">Service operations, under control.</h2>
@@ -40,7 +40,7 @@ export function AuthLayout({ title, subtitle, children, footer, brand }: { title
               <ShieldCheck className="h-4 w-4 shrink-0" />
               Role-based access, two-factor sign-in and a full audit trail.
             </p>
-            <p className="text-xs text-slate-500">© {new Date().getFullYear()} ServiceCRM</p>
+            <p className="text-xs text-slate-500">© {new Date().getFullYear()} Servon</p>
           </div>
         </div>
       </div>
@@ -50,7 +50,7 @@ export function AuthLayout({ title, subtitle, children, footer, brand }: { title
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-700 text-white">
               <Wrench className="h-5 w-5" />
             </div>
-            <span className="text-lg font-semibold">{brand ?? 'ServiceCRM'}</span>
+            <span className="text-lg font-semibold">{brand ?? 'Servon'}</span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
           {subtitle && <p className="mt-2 text-sm text-slate-500">{subtitle}</p>}

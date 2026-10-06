@@ -7,6 +7,7 @@ import { openCheckout } from '@/lib/checkout';
 import { date, money } from '@/lib/format';
 import { Button, Card, QueryState, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
+import { UpiQr } from '@/components/upi';
 
 interface PublicInvoice {
   company: string;
@@ -22,6 +23,7 @@ interface PublicInvoice {
   balance_amount: number;
   payment_status: string;
   online_payments: boolean;
+  upi: { vpa: string; payee_name: string; amount: number; link: string } | null;
 }
 
 /** Public payment-link page (/pay/:token) sent by SMS / WhatsApp. */
@@ -85,7 +87,18 @@ export default function PayInvoice() {
                   Pay {money(inv.balance_amount, inv.currency)} securely
                 </Button>
               )}
-              {inv.balance_amount > 0 && !inv.online_payments && <p className="rounded-lg bg-slate-50 p-3 text-center text-sm text-slate-600">Please pay our service agent (cash / UPI / cheque) or at our office.</p>}
+              {inv.balance_amount > 0 && inv.upi && (
+                <div className="mt-3 flex flex-col items-center rounded-xl border border-slate-200 p-4 text-center">
+                  <p className="mb-2 text-sm font-medium text-slate-700">Or scan with any UPI app</p>
+                  <UpiQr link={inv.upi.link} size={200} />
+                  <p className="mt-2 text-sm text-slate-600">{inv.upi.payee_name}</p>
+                  <p className="font-mono text-xs text-slate-500">{inv.upi.vpa}</p>
+                  <a href={inv.upi.link} className="mt-2 text-sm font-medium text-brand-700 hover:underline sm:hidden">
+                    Open in UPI app
+                  </a>
+                </div>
+              )}
+              {inv.balance_amount > 0 && !inv.online_payments && !inv.upi && <p className="rounded-lg bg-slate-50 p-3 text-center text-sm text-slate-600">Please pay our service agent (cash / UPI / cheque) or at our office.</p>}
               <a href={`${API_BASE}/pay/${token}/pdf`} className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-brand-700 hover:underline">
                 <Download className="h-4 w-4" /> Download invoice (PDF)
               </a>

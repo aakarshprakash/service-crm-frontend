@@ -95,7 +95,7 @@ export default function Dashboard() {
               <div className="flex flex-wrap gap-2">
                 {d.jobs.overdue > 0 && <Alert to="/jobs?status=open,pending&sort=scheduled" icon={<CalendarClock className="h-4 w-4" />} text={`${d.jobs.overdue} overdue visit${d.jobs.overdue > 1 ? 's' : ''}`} />}
                 {d.jobs.unassigned > 0 && <Alert to="/jobs?technician_id=unassigned&status=open,pending" icon={<UserX className="h-4 w-4" />} text={`${d.jobs.unassigned} job${d.jobs.unassigned > 1 ? 's' : ''} need a technician`} />}
-                {d.cash.pending_verification > 0 && can('cash.verify') && <Alert to="/accounts?status=submitted" icon={<Wallet className="h-4 w-4" />} text={`${d.cash.pending_verification} cash close${d.cash.pending_verification > 1 ? 's' : ''} to verify`} />}
+                {d.cash.pending_verification > 0 && can('cash.verify') && <Alert to="/accounts/cash-close?status=submitted" icon={<Wallet className="h-4 w-4" />} text={`${d.cash.pending_verification} cash close${d.cash.pending_verification > 1 ? 's' : ''} to verify`} />}
                 {d.inventory.low_stock_count > 0 && <Alert to="/inventory?tab=stock&low_stock=1" icon={<AlertTriangle className="h-4 w-4" />} text={`${d.inventory.low_stock_count} item${d.inventory.low_stock_count > 1 ? 's' : ''} low on stock`} />}
               </div>
             )}

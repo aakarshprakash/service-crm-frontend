@@ -1,12 +1,12 @@
 import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, ClipboardList, LogIn, LogOut, MapPin, Package, PlayCircle, Wallet } from 'lucide-react';
+import { ChevronRight, ClipboardList, LogIn, LogOut, MapPin, Package, PlayCircle, Wallet, Wrench } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApiMutation } from '@/lib/hooks';
-import { dateTime, money, time } from '@/lib/format';
+import { date, dateTime, money, time } from '@/lib/format';
 import { getPosition } from '@/lib/utils';
-import type { Job, Visit } from '@/lib/types';
+import type { Asset, Job, Visit } from '@/lib/types';
 import { Button, Card, QueryState } from '@/components/ui';
 import { PriorityBadge, StatusBadge } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
@@ -28,7 +28,7 @@ export default function TechHome() {
   const punch = useApiMutation(
     async (type: 'in' | 'out') => {
       const pos = await getPosition(8000).catch(() => null); // location is optional for attendance
-      return api.post('/punch', { type, ...(pos ?? {}) });
+      return api.post('/punch', { type, source: 'web', ...(pos ?? {}) });
     },
     { invalidate: [['tech-dashboard']], onSuccess: () => refresh() },
   );
@@ -114,6 +114,8 @@ export default function TechHome() {
             </div>
           </Card>
 
+          <MyAssets />
+
           <Card title="Today & overdue" padded={false}>
             {!d.today.length ? (
               <p className="px-5 py-8 text-center text-sm text-slate-500">No visits scheduled for today. 🎉</p>
@@ -145,5 +147,34 @@ export default function TechHome() {
         </div>
       )}
     </QueryState>
+  );
+}
+
+type MyAsset = Pick<Asset, 'id' | 'asset_code' | 'name' | 'category' | 'brand' | 'model' | 'serial_no' | 'condition'> & {
+  current_assignment: { issued_at: string; issue_notes: string | null } | null;
+};
+
+/** Company tools / devices currently issued to this technician. Hidden when they hold none. */
+function MyAssets() {
+  const q = useQuery({ queryKey: ['my-assets'], queryFn: () => api.get<Envelope<MyAsset[]>>('/my/assets').then((r) => r.data) });
+  if (!q.data?.length) return null;
+  return (
+    <Card title={`My assets (${q.data.length})`} padded={false}>
+      <ul className="divide-y divide-slate-100">
+        {q.data.map((a) => (
+          <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+            <Wrench className="h-5 w-5 shrink-0 text-slate-400" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{a.name}</p>
+              <p className="truncate text-xs text-slate-500">
+                {a.asset_code}
+                {a.serial_no && ` · SN ${a.serial_no}`}
+                {a.current_assignment && ` · since ${date(a.current_assignment.issued_at)}`}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

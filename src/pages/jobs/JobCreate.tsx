@@ -6,7 +6,7 @@ import { api, ApiError, type Envelope, type Paginated } from '@/lib/api';
 import { useLookups, useStaffOptions } from '@/lib/hooks';
 import { fromLocalInput } from '@/lib/format';
 import type { Customer, CustomerProduct, Job } from '@/lib/types';
-import { Button, Card, Field, Input, PageHeader, SearchInput, Select, Textarea, toast } from '@/components/ui';
+import { Button, Card, Checkbox, Field, Input, PageHeader, SearchInput, Select, Textarea, toast } from '@/components/ui';
 import { CustomerForm, type CustomerDraft, emptyCustomer } from '@/pages/customers/CustomerForm';
 import { Hint } from '@/components/tutorial';
 
@@ -29,7 +29,17 @@ export default function JobCreate() {
     scheduled_at: '',
     assigned_technician_id: '',
     branch_id: '',
+    service_location_id: '',
   });
+  const [autoAssign, setAutoAssign] = useState(false);
+  const locations = lookups?.service_locations ?? [];
+
+  // Suggest the service location whose PIN codes include the customer's PIN.
+  const pincode = (customer?.pincode ?? newCustomer?.pincode ?? '').replace(/\D/g, '');
+  const suggested = pincode.length >= 4 ? locations.find((l) => (l.pincodes ?? '').split(/[\s,]+/).includes(pincode)) : undefined;
+  useEffect(() => {
+    if (suggested) setJob((j) => (j.service_location_id ? j : { ...j, service_location_id: String(suggested.id) }));
+  }, [suggested?.id]);
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -68,18 +78,22 @@ export default function JobCreate() {
         setError(new ApiError(422, 'Select or add a customer.', { customer_id: ['Select or add a customer.'] }));
         return;
       }
-      const res = await api.post<Envelope<Job>>('/jobs', {
+      const res = await api.post<Envelope<Job> & { meta?: { auto_assign?: { assigned: boolean } } }>('/jobs', {
         ...job,
         customer_id: customerId,
         customer_product_id: productId,
         complaint_type_id: job.complaint_type_id || null,
         complaint_summary_id: job.complaint_summary_id || null,
-        assigned_technician_id: job.assigned_technician_id || null,
+        assigned_technician_id: autoAssign ? null : job.assigned_technician_id || null,
         branch_id: job.branch_id || null,
+        service_location_id: job.service_location_id || null,
+        auto_assign: autoAssign,
         crm_call_id: job.crm_call_id || null,
         scheduled_at: fromLocalInput(job.scheduled_at),
       });
-      toast.success(res.message ?? 'Job created.');
+      // Auto-assign can fail (nobody covers the area / everyone at the limit); the job is still created.
+      if (res.meta?.auto_assign && !res.meta.auto_assign.assigned) toast.info(res.message ?? 'Job created but not assigned.');
+      else toast.success(res.message ?? 'Job created.');
       navigate(`/jobs/${res.data.id}`);
     } catch (err) {
       setError(err as ApiError);
@@ -230,8 +244,24 @@ export default function JobCreate() {
               <Field label="Visit date & time" error={f('scheduled_at')}>
                 <Input type="datetime-local" value={job.scheduled_at} onChange={(e) => set('scheduled_at', e.target.value)} />
               </Field>
-              <Field label="Technician" error={f('assigned_technician_id')} hint="You can also assign later.">
-                <Select value={job.assigned_technician_id} onChange={(e) => set('assigned_technician_id', e.target.value)}>
+              {locations.length > 0 && (
+                <Field label="Service location" error={f('service_location_id')} hint={suggested && String(suggested.id) === job.service_location_id ? `Matched from PIN code ${pincode}.` : undefined}>
+                  <Select value={job.service_location_id} onChange={(e) => set('service_location_id', e.target.value)}>
+                    <option value="">Not specified</option>
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                        {l.city ? ` · ${l.city}` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
+              <Hint align="left" block text="Picks the technician linked to this job’s service location who has the fewest open jobs, skipping anyone at the limit set in Settings. Without a location, technicians of the job’s branch are used.">
+                <Checkbox label="Auto-assign a technician" checked={autoAssign} onChange={setAutoAssign} />
+              </Hint>
+              <Field label="Technician" error={f('assigned_technician_id')} hint={autoAssign ? 'Chosen automatically when you save.' : 'You can also assign later.'}>
+                <Select value={autoAssign ? '' : job.assigned_technician_id} disabled={autoAssign} onChange={(e) => set('assigned_technician_id', e.target.value)}>
                   <option value="">Assign later</option>
                   {techs?.map((t) => (
                     <option key={t.id} value={t.id}>

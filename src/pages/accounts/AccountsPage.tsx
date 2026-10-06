@@ -82,7 +82,7 @@ function Queue() {
       <DataTable
         rows={list.data?.data}
         loading={list.isFetching}
-        onRowClick={(c) => navigate(`/accounts/${c.id}`)}
+        onRowClick={(c) => navigate(`/accounts/cash-close/${c.id}`)}
         rowClassName={(c) => (c.discrepancy_amount !== 0 || c.amount_confirmed !== c.expected_in_hand ? 'bg-amber-50/60' : undefined)}
         empty={<EmptyState title="No cash closes" message="Technicians submit their daily cash from the app at the end of the day." />}
         columns={[

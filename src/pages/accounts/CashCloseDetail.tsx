@@ -23,7 +23,7 @@ export default function CashCloseDetail() {
         <>
           <PageHeader
             back={
-              <Link to="/accounts" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+              <Link to="/accounts/cash-close" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
                 <ArrowLeft className="h-4 w-4" /> Cash close
               </Link>
             }

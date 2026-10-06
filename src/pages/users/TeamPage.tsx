@@ -78,7 +78,17 @@ export default function TeamPage() {
             },
             { key: 'role', header: 'Role', render: (u) => <Badge tone={u.role === 'technician' ? 'blue' : u.role === 'admin' ? 'violet' : 'slate'}>{t(`role.${u.role}`)}</Badge> },
             { key: 'phone', header: 'Phone', hideOnMobile: true, render: (u) => u.phone ?? '—' },
-            { key: 'branch', header: 'Branch', hideOnMobile: true, render: (u) => u.branch?.name ?? '—' },
+            {
+              key: 'branch',
+              header: 'Branch / areas',
+              hideOnMobile: true,
+              render: (u) => (
+                <div>
+                  <p>{u.branch?.name ?? '—'}</p>
+                  {!!u.service_locations?.length && <p className="max-w-[14rem] truncate text-xs text-slate-500">{u.service_locations.map((l) => l.name).join(', ')}</p>}
+                </div>
+              ),
+            },
             { key: 'duty', header: 'Duty', hideOnMobile: true, render: (u) => (u.role === 'technician' ? <Badge tone={u.punch_status === 'in' ? 'green' : 'slate'} dot>{u.punch_status === 'in' ? 'On duty' : 'Off duty'}</Badge> : '—') },
             { key: 'last', header: 'Last sign-in', hideOnMobile: true, render: (u) => (u.last_login_at ? relative(u.last_login_at) : 'Never') },
             { key: 'status', header: 'Status', render: (u) => <StatusBadge status={u.status} /> },
@@ -129,12 +139,20 @@ function UserDialog({ user, onClose }: { user: StaffUser | null; onClose: () => 
   const { t } = useTranslation();
   const { data: lookups } = useLookups();
   const [form, setForm] = useState({ name: user?.name ?? '', email: user?.email ?? '', phone: user?.phone ?? '', role: user?.role ?? 'technician', branch_id: String(user?.branch_id ?? '') });
+  const [locationIds, setLocationIds] = useState<number[]>(user?.service_locations?.map((l) => l.id) ?? []);
+  const locations = lookups?.service_locations ?? [];
   const m = useApiMutation(
     () => {
-      const body = { ...form, phone: form.phone || null, branch_id: form.branch_id || null };
+      const body = {
+        ...form,
+        phone: form.phone || null,
+        branch_id: form.branch_id || null,
+        // Only technicians cover areas; clear links if the role changes away from technician.
+        service_location_ids: form.role === 'technician' ? locationIds : [],
+      };
       return user ? api.patch(`/users/${user.id}`, body) : api.post('/users', body);
     },
-    { invalidate: [['users'], ['staff-options']], toastValidation: false, onSuccess: onClose },
+    { invalidate: [['users'], ['staff-options'], ['master']], toastValidation: false, onSuccess: onClose },
   );
   const e = (n: string) => fieldError(m.error, n);
   return (
@@ -183,6 +201,30 @@ function UserDialog({ user, onClose }: { user: StaffUser | null; onClose: () => 
             ))}
           </Select>
         </Field>
+        {form.role === 'technician' && (
+          <Field label="Service locations covered" className="sm:col-span-2" error={e('service_location_ids')} hint="New jobs in these areas can be auto-assigned to this technician.">
+            {locations.length ? (
+              <div className="flex flex-wrap gap-2">
+                {locations.map((l) => {
+                  const on = locationIds.includes(l.id);
+                  return (
+                    <button
+                      type="button"
+                      key={l.id}
+                      aria-pressed={on}
+                      onClick={() => setLocationIds((ids) => (on ? ids.filter((i) => i !== l.id) : [...ids, l.id]))}
+                      className={`rounded-full border px-3 py-1 text-sm ${on ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No service locations yet. Add them in Settings → Master data.</p>
+            )}
+          </Field>
+        )}
         <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 sm:col-span-2">
           <strong>Coordinator:</strong> creates & assigns jobs. <strong>Accountant:</strong> invoices, cash close, inventory & financial reports. <strong>Technician:</strong> executes visits in the field app.{' '}
           <strong>Company Admin:</strong> everything, including settings and users.

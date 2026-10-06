@@ -100,6 +100,16 @@ export default function JobsPage() {
               ))}
             </Select>
           )}
+          {(lookups?.service_locations?.length ?? 0) > 0 && (
+            <Select value={filters.service_location_id ?? ''} onChange={(e) => setFilter('service_location_id', e.target.value)} className="sm:w-44" aria-label="Service location">
+              <option value="">All locations</option>
+              {lookups?.service_locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          )}
           <Select value={filters.complaint_type_id ?? ''} onChange={(e) => setFilter('complaint_type_id', e.target.value)} className="sm:w-44" aria-label="Complaint type">
             <option value="">All complaint types</option>
             {lookups?.complaint_types.map((c) => (
