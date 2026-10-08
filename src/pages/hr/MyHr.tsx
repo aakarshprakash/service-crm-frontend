@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { CalendarPlus, ChevronLeft, ChevronRight, Download, LogIn, LogOut } from 'lucide-react';
 import { api, download, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
@@ -13,10 +14,11 @@ import { STATUS_STYLE, hours, monthName, num, thisMonth } from './hrParts';
 
 /** Self service for every staff member: punch, my attendance, leave and payslips. */
 export default function MyHr() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   return (
     <div className={cn(user?.role === 'technician' && 'mx-auto max-w-2xl')}>
-      <PageHeader title="My HR" description="Your attendance, leave and payslips." />
+      <PageHeader title={t('nav.me')} description={t('myhr.subtitle')} />
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <MyAttendance />
@@ -31,6 +33,7 @@ export default function MyHr() {
 }
 
 function MyAttendance() {
+  const { t } = useTranslation();
   const { refresh } = useAuth();
   const qc = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
@@ -51,7 +54,7 @@ function MyAttendance() {
     try {
       const pos = await getPosition(8000).catch(() => null);
       const res = await api.post<{ message?: string }>('/punch', { type: on ? 'out' : 'in', source: 'web', ...(pos ?? {}) });
-      toast.success(res.message ?? 'Done.');
+      toast.success(res.message ?? t('common.done'));
       await refresh();
       qc.invalidateQueries({ queryKey: ['my-attendance'] });
       qc.invalidateQueries({ queryKey: ['tech-dashboard'] });
@@ -66,28 +69,28 @@ function MyAttendance() {
 
   return (
     <Card
-      title="Attendance"
+      title={t('myhr.attendance')}
       actions={
         <Button size="sm" variant={on ? 'secondary' : 'success'} loading={busy} icon={on ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />} onClick={punch}>
-          {on ? 'Punch out' : 'Punch in'}
+          {on ? t('punch.out') : t('punch.in')}
         </Button>
       }
     >
       <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
         {d && (
           <>
-            <p className="mb-3 text-sm text-slate-500">{on ? `On duty since ${time(d.punched_at)}` : 'You are off duty.'}</p>
+            <p className="mb-3 text-sm text-slate-500">{on ? t('tech.onDutySince', { time: time(d.punched_at) }) : t('tech.offDuty')}</p>
             <div className="mb-3 flex items-center justify-between">
-              <Button variant="ghost" size="sm" aria-label="Previous month" onClick={() => step(-1)}>
+              <Button variant="ghost" size="sm" aria-label={t('common.previousMonth')} onClick={() => step(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-sm font-semibold">{monthName(month)}</span>
-              <Button variant="ghost" size="sm" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => step(1)}>
+              <Button variant="ghost" size="sm" aria-label={t('common.nextMonth')} disabled={month >= thisMonth()} onClick={() => step(1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
             <div className="grid grid-cols-7 gap-1 text-center text-[11px]">
-              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((w, i) => (
+              {(t('common.weekdaysShort', { returnObjects: true }) as string[]).map((w, i) => (
                 <span key={i} className="pb-1 font-medium text-slate-400">
                   {w}
                 </span>
@@ -100,7 +103,7 @@ function MyAttendance() {
                 return (
                   <div
                     key={day.date}
-                    title={[s.label, day.in && `In ${day.in}`, day.out && `Out ${day.out}`, day.minutes ? hours(day.minutes) : null, day.leave_type ?? day.holiday ?? day.note].filter(Boolean).join(' · ')}
+                    title={[t(`day.${day.status}`), day.in && `${t('myhr.in')} ${day.in}`, day.out && `${t('myhr.out')} ${day.out}`, day.minutes ? hours(day.minutes) : null, day.leave_type ?? day.holiday ?? day.note].filter(Boolean).join(' · ')}
                     className={cn('flex aspect-square flex-col items-center justify-center rounded-md', s.cell, day.date === today() && 'ring-2 ring-brand-500')}
                   >
                     <span className="text-xs font-semibold">{Number(day.date!.slice(8))}</span>
@@ -112,11 +115,11 @@ function MyAttendance() {
             <dl className="mt-4 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
               {(
                 [
-                  ['Present', d.summary.present],
-                  ['Leave', d.summary.paid_leave],
-                  ['Unpaid', d.summary.unpaid_leave],
-                  ['Absent', d.summary.absent],
-                  ['Holidays', d.summary.holidays],
+                  [t('day.present'), d.summary.present],
+                  [t('myhr.leave'), d.summary.paid_leave],
+                  [t('myhr.unpaid'), d.summary.unpaid_leave],
+                  [t('day.absent'), d.summary.absent],
+                  [t('myhr.holidays'), d.summary.holidays],
                 ] as const
               ).map(([k, v]) => (
                 <div key={k} className="rounded-lg bg-slate-50 p-2">
@@ -125,7 +128,7 @@ function MyAttendance() {
                 </div>
               ))}
               <div className="rounded-lg bg-slate-50 p-2">
-                <dt className="text-slate-500">Hours</dt>
+                <dt className="text-slate-500">{t('myhr.hours')}</dt>
                 <dd className="text-sm font-semibold">{hours(d.summary.minutes)}</dd>
               </div>
             </dl>
@@ -137,16 +140,17 @@ function MyAttendance() {
 }
 
 function MyLeave() {
+  const { t } = useTranslation();
   const q = useQuery({ queryKey: ['my-leaves'], queryFn: () => api.get<Envelope<{ year: number; balances: LeaveBalance[]; requests: LeaveRequest[] }>>('/my/leaves').then((r) => r.data) });
   const [applying, setApplying] = useState(false);
   const cancel = useApiMutation((id: number) => api.post(`/my/leaves/${id}/cancel`), { invalidate: [['my-leaves'], ['my-attendance']] });
   const d = q.data;
   return (
     <Card
-      title="Leave"
+      title={t('myhr.leave')}
       actions={
         <Button size="sm" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setApplying(true)}>
-          Apply
+          {t('myhr.apply')}
         </Button>
       }
     >
@@ -158,14 +162,14 @@ function MyLeave() {
                 <div key={b.leave_type.id} className="rounded-lg border border-slate-200 p-3">
                   <p className="text-xs text-slate-500">{b.leave_type.name}</p>
                   <p className="text-lg font-semibold tabular-nums">{b.remaining === null ? num(b.used) : num(b.remaining)}</p>
-                  <p className="text-[11px] text-slate-500">{b.remaining === null ? 'days taken' : `left of ${num(b.quota)}`}{b.pending > 0 && ` · ${num(b.pending)} pending`}</p>
+                  <p className="text-[11px] text-slate-500">{b.remaining === null ? t('myhr.daysTaken') : t('myhr.leftOf', { quota: num(b.quota) })}{b.pending > 0 && ` · ${t('myhr.pendingDays', { days: num(b.pending) })}`}</p>
                 </div>
               ))}
             </div>
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">My requests</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('myhr.myRequests')}</p>
               {!d.requests.length ? (
-                <p className="text-sm text-slate-500">No leave requests yet.</p>
+                <p className="text-sm text-slate-500">{t('myhr.noRequests')}</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {d.requests.map((l) => {
@@ -174,7 +178,7 @@ function MyLeave() {
                       <li key={l.id} className="flex items-start justify-between gap-2 py-2.5 text-sm">
                         <div>
                           <p className="font-medium text-slate-900">
-                            {l.type?.name} · {num(l.days)}d
+                            {l.type?.name} · {t('myhr.daysShort', { days: num(l.days) })}
                           </p>
                           <p className="text-xs text-slate-500">
                             {date(l.from_date)}
@@ -183,10 +187,10 @@ function MyLeave() {
                           {l.decision_note && <p className="text-xs text-slate-500">“{l.decision_note}”</p>}
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <Badge tone={LEAVE_TONE[l.status]}>{l.status}</Badge>
+                          <Badge tone={LEAVE_TONE[l.status]}>{t(`leaveStatus.${l.status}`)}</Badge>
                           {canCancel && (
                             <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => cancel.mutate(l.id)}>
-                              Cancel
+                              {t('action.cancel')}
                             </button>
                           )}
                         </div>
@@ -205,6 +209,7 @@ function MyLeave() {
 }
 
 function ApplyLeave({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const { data: lookups } = useLookups();
   const [form, setForm] = useState({ leave_type_id: '', from_date: today(), to_date: today(), half_day: false, reason: '' });
   const m = useApiMutation(() => api.post('/my/leaves', { ...form, leave_type_id: Number(form.leave_type_id), to_date: form.half_day ? form.from_date : form.to_date, reason: form.reason || null }), {
@@ -217,44 +222,44 @@ function ApplyLeave({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="Apply for leave"
-      description="Your manager is notified. Weekly offs and holidays inside the dates are not counted."
+      title={t('myhr.applyTitle')}
+      description={t('myhr.applyHint')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t('action.cancel')}
           </Button>
           <Button loading={m.isPending} disabled={!form.leave_type_id} onClick={() => m.mutate(undefined)}>
-            Send request
+            {t('myhr.sendRequest')}
           </Button>
         </>
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Leave type" required className="sm:col-span-2" error={e('leave_type_id')}>
+        <Field label={t('myhr.leaveType')} required className="sm:col-span-2" error={e('leave_type_id')}>
           <Select value={form.leave_type_id} onChange={(ev) => setForm({ ...form, leave_type_id: ev.target.value })}>
-            <option value="">Select…</option>
-            {lookups?.leave_types?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-                {!t.is_paid && ' (unpaid)'}
+            <option value="">{t('common.select')}</option>
+            {lookups?.leave_types?.map((lt) => (
+              <option key={lt.id} value={lt.id}>
+                {lt.name}
+                {!lt.is_paid && ` (${t('myhr.unpaidLower')})`}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label={form.half_day ? 'Date' : 'From'} required error={e('from_date')}>
+        <Field label={form.half_day ? t('common.date') : t('common.from')} required error={e('from_date')}>
           <Input type="date" value={form.from_date} onChange={(ev) => setForm({ ...form, from_date: ev.target.value, to_date: ev.target.value > form.to_date ? ev.target.value : form.to_date })} />
         </Field>
         {!form.half_day && (
-          <Field label="To" required error={e('to_date')}>
+          <Field label={t('common.to')} required error={e('to_date')}>
             <Input type="date" min={form.from_date} value={form.to_date} onChange={(ev) => setForm({ ...form, to_date: ev.target.value })} />
           </Field>
         )}
         <div className="sm:col-span-2">
-          <Checkbox label="Half day" checked={form.half_day} onChange={(v) => setForm({ ...form, half_day: v })} />
+          <Checkbox label={t('myhr.halfDay')} checked={form.half_day} onChange={(v) => setForm({ ...form, half_day: v })} />
           {e('half_day') && <p className="text-xs text-red-600">{e('half_day')}</p>}
         </div>
-        <Field label="Reason" className="sm:col-span-2" error={e('reason')}>
+        <Field label={t('myhr.reason')} className="sm:col-span-2" error={e('reason')}>
           <Textarea rows={2} maxLength={500} value={form.reason} onChange={(ev) => setForm({ ...form, reason: ev.target.value })} />
         </Field>
       </div>
@@ -263,12 +268,13 @@ function ApplyLeave({ onClose }: { onClose: () => void }) {
 }
 
 function MyPayslips() {
+  const { t } = useTranslation();
   const q = useQuery({ queryKey: ['my-payslips'], queryFn: () => api.get<Envelope<Payslip[]>>('/my/payslips').then((r) => r.data) });
   return (
-    <Card title="Payslips" padded={false}>
+    <Card title={t('myhr.payslips')} padded={false}>
       <QueryState loading={q.isLoading} error={q.error}>
         {!q.data?.length ? (
-          <EmptyState title="No payslips yet" message="Payslips appear here once payroll for a month is finalized." />
+          <EmptyState title={t('myhr.noPayslips')} message={t('myhr.noPayslipsHint')} />
         ) : (
           <ul className="divide-y divide-slate-100">
             {q.data.map((p) => (
@@ -276,8 +282,8 @@ function MyPayslips() {
                 <div>
                   <p className="text-sm font-medium text-slate-900">{p.run && monthName(p.run.month)}</p>
                   <p className="text-xs text-slate-500">
-                    {num(p.present_days)} days present
-                    {p.lop_days > 0 && ` · ${num(p.lop_days)} LOP`} · {p.run?.status === 'paid' ? 'Paid' : 'Processing'}
+                    {t('myhr.daysPresent', { days: num(p.present_days) })}
+                    {p.lop_days > 0 && ` · ${t('myhr.lop', { days: num(p.lop_days) })}`} · {p.run?.status === 'paid' ? t('common.paid') : t('myhr.processing')}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

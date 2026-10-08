@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Inbox, RefreshCw, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
@@ -76,22 +77,23 @@ export function DataTable<T extends { id: number | string }>({
 }
 
 export function Pagination({ meta, onPage }: { meta?: { current_page: number; last_page: number; total: number; per_page: number }; onPage: (p: number) => void }) {
+  const { t } = useTranslation();
   if (!meta || meta.total === 0) return null;
   const from = (meta.current_page - 1) * meta.per_page + 1;
   const to = Math.min(meta.total, meta.current_page * meta.per_page);
   return (
     <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
       <span>
-        {from}–{to} of <span className="font-medium text-slate-900">{meta.total}</span>
+        {t('pager.range', { from, to })} <span className="font-medium text-slate-900">{meta.total}</span>
       </span>
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" disabled={meta.current_page <= 1} onClick={() => onPage(meta.current_page - 1)} aria-label="Previous page">
+        <Button variant="ghost" size="sm" disabled={meta.current_page <= 1} onClick={() => onPage(meta.current_page - 1)} aria-label={t('pager.previous')}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="px-2 tabular-nums">
           {meta.current_page} / {meta.last_page}
         </span>
-        <Button variant="ghost" size="sm" disabled={meta.current_page >= meta.last_page} onClick={() => onPage(meta.current_page + 1)} aria-label="Next page">
+        <Button variant="ghost" size="sm" disabled={meta.current_page >= meta.last_page} onClick={() => onPage(meta.current_page + 1)} aria-label={t('pager.next')}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -99,7 +101,10 @@ export function Pagination({ meta, onPage }: { meta?: { current_page: number; la
   );
 }
 
-export function EmptyState({ title = 'Nothing here yet', message = 'Try changing your filters or search.', action, icon }: { title?: string; message?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
+export function EmptyState({ title, message, action, icon }: { title?: string; message?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
+  const { t } = useTranslation();
+  title ??= t('common.noResults');
+  message ??= t('common.noResultsHint');
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">{icon ?? <Inbox className="h-6 w-6" />}</div>
@@ -115,7 +120,7 @@ export function PageHeader({ title, description, actions, back }: { title: React
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {back}
-        <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+        <h1 className="truncate text-xl font-bold tracking-tight text-navy-900 sm:text-[26px]">{title}</h1>
         {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -125,8 +130,8 @@ export function PageHeader({ title, description, actions, back }: { title: React
 
 export function StatCard({ label, value, hint, icon, tone = 'blue', onClick }: { label: string; value: ReactNode; hint?: ReactNode; icon?: ReactNode; tone?: 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'slate'; onClick?: () => void }) {
   const toneCls = {
-    blue: 'bg-brand-50 text-brand-700',
-    green: 'bg-emerald-50 text-emerald-700',
+    blue: 'bg-brand-50 text-brand-600',
+    green: 'bg-accent-50 text-accent-600',
     amber: 'bg-amber-50 text-amber-700',
     red: 'bg-red-50 text-red-700',
     violet: 'bg-violet-50 text-violet-700',
@@ -136,12 +141,12 @@ export function StatCard({ label, value, hint, icon, tone = 'blue', onClick }: {
   return (
     <Tag
       onClick={onClick}
-      className={cn('flex w-full items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-card', onClick && 'transition hover:border-brand-300 hover:shadow-md')}
+      className={cn('flex w-full items-start gap-4 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-card', onClick && 'transition hover:-translate-y-px hover:border-brand-200 hover:shadow-lift')}
     >
       {icon && <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', toneCls)}>{icon}</div>}
       <div className="min-w-0">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-1 truncate text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
+        <p className="mt-1 truncate text-2xl font-bold tabular-nums text-navy-900">{value}</p>
         {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
       </div>
     </Tag>
@@ -159,7 +164,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
           onClick={() => onChange(t.value)}
           className={cn(
             '-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
-            value === t.value ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
+            value === t.value ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
           )}
         >
           {t.label}
@@ -172,7 +177,8 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
   );
 }
 
-export function SearchInput({ value, onChange, placeholder = 'Search…', className, delay = 300 }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string; delay?: number }) {
+export function SearchInput({ value, onChange, placeholder, className, delay = 300 }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string; delay?: number }) {
+  const { t } = useTranslation();
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
   useEffect(() => {
@@ -188,7 +194,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search…', classN
         type="search"
         value={local}
         onChange={(e) => setLocal(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('common.searchPlaceholder')}
         className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
       />
     </div>
@@ -196,6 +202,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search…', classN
 }
 
 export function QueryState({ loading, error, onRetry, children }: { loading: boolean; error: unknown; onRetry?: () => void; children: ReactNode }) {
+  const { t } = useTranslation();
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -207,12 +214,12 @@ export function QueryState({ loading, error, onRetry, children }: { loading: boo
     const status = error instanceof ApiError ? error.status : 0;
     return (
       <EmptyState
-        title={status === 404 ? 'Not found' : status === 403 ? 'Access denied' : 'Could not load this page'}
-        message={error instanceof Error ? error.message : 'Please try again.'}
+        title={status === 404 ? t('error.notFound') : status === 403 ? t('error.forbidden') : t('error.loadFailed')}
+        message={error instanceof Error ? error.message : t('error.tryAgain')}
         action={
           onRetry && status !== 404 && status !== 403 ? (
             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={onRetry}>
-              Try again
+              {t('action.retry')}
             </Button>
           ) : undefined
         }

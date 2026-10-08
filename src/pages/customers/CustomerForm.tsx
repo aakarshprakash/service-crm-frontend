@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import type { ApiError } from '@/lib/api';
 import { useLookups } from '@/lib/hooks';
-import { Field, Input, Select, Textarea } from '@/components/ui';
+import { Combobox, Field, Input, Select, Textarea, type ComboboxOption } from '@/components/ui';
 
 export interface ProductDraft {
   product_id: string;
@@ -79,23 +80,40 @@ export function CustomerForm({ value, onChange, error, withProduct }: { value: C
   );
 }
 
-export function ProductFields({ value, onChange, error, prefix = '' }: { value: ProductDraft; onChange: (v: ProductDraft) => void; error: ApiError | null; prefix?: string }) {
+export function ProductFields({ value, onChange, error, prefix = '', title = 'Product' }: { value: ProductDraft; onChange: (v: ProductDraft) => void; error: ApiError | null; prefix?: string; title?: string | null }) {
   const { data: lookups } = useLookups();
   const set = (k: keyof ProductDraft, v: string) => onChange({ ...value, [k]: v });
   const f = (n: string) => error?.field(prefix + n);
+
+  // Grouped by product category so a long model list stays navigable.
+  const productOptions = useMemo<ComboboxOption[]>(() => {
+    const categories = new Map((lookups?.categories ?? []).map((c) => [c.id, c.name]));
+    return (lookups?.products ?? [])
+      .map((p) => ({
+        value: String(p.id),
+        label: [p.brand?.name, p.model_name].filter(Boolean).join(' ') || 'Model',
+        group: (p.category_id ? categories.get(p.category_id) : undefined) ?? 'Other',
+      }))
+      .sort((a, b) => a.group.localeCompare(b.group) || a.label.localeCompare(b.label));
+  }, [lookups]);
+
+  const dealerOptions = useMemo<ComboboxOption[]>(() => (lookups?.dealers ?? []).map((d) => ({ value: String(d.id), label: d.name })), [lookups]);
+
   return (
     <div className="rounded-lg border border-slate-200 p-4">
-      <p className="mb-3 text-sm font-medium text-slate-700">Product</p>
+      {title && <p className="mb-3 text-sm font-medium text-slate-700">{title}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Model" error={f('product_id')} className="sm:col-span-2">
-          <Select value={value.product_id} onChange={(e) => set('product_id', e.target.value)}>
-            <option value="">Select model…</option>
-            {lookups?.products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.brand?.name} {p.model_name}
-              </option>
-            ))}
-          </Select>
+        <Field label="Model" error={f('product_id')} className="sm:col-span-2" hint={lookups && !lookups.products.length ? 'No models configured yet — an admin adds them in Settings → Master data.' : undefined}>
+          <Combobox
+            value={value.product_id}
+            onChange={(v) => set('product_id', v)}
+            options={productOptions}
+            placeholder="Select model…"
+            searchPlaceholder="Search brand or model…"
+            emptyText="No model matches. Try the brand name."
+            invalid={!!f('product_id')}
+            aria-label="Product model"
+          />
         </Field>
         <Field label="Serial no." error={f('serial_no')}>
           <Input value={value.serial_no} onChange={(e) => set('serial_no', e.target.value)} />
@@ -107,14 +125,7 @@ export function ProductFields({ value, onChange, error, prefix = '' }: { value: 
           <Input type="date" value={value.purchase_date} onChange={(e) => set('purchase_date', e.target.value)} />
         </Field>
         <Field label="Dealer" error={f('dealer_id')}>
-          <Select value={value.dealer_id} onChange={(e) => set('dealer_id', e.target.value)}>
-            <option value="">Select…</option>
-            {lookups?.dealers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
+          <Combobox value={value.dealer_id} onChange={(v) => set('dealer_id', v)} options={dealerOptions} placeholder="Select…" searchPlaceholder="Search dealer…" invalid={!!f('dealer_id')} aria-label="Dealer" />
         </Field>
         <Field label="Warranty" error={f('warranty_type')}>
           <Select value={value.warranty_type} onChange={(e) => set('warranty_type', e.target.value)}>

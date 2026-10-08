@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './primitives';
@@ -21,6 +22,7 @@ export function Modal({
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
+  const { t } = useTranslation();
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,11 +52,11 @@ export function Modal({
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
           </div>
-          <button data-close onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+          <button data-close onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label={t('action.close')}>
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="scroll-light overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="flex flex-col-reverse gap-2 border-t border-slate-100 px-5 py-3 sm:flex-row sm:justify-end">{footer}</div>}
       </div>
     </div>,
@@ -84,6 +86,7 @@ export function ConfirmDialog({
   loading?: boolean;
   children?: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal
       open={open}
@@ -93,7 +96,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t('action.cancel')}
           </Button>
           <Button variant={tone} onClick={onConfirm} loading={loading}>
             {confirmLabel}

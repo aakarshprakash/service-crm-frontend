@@ -29,6 +29,7 @@ interface SettingsData {
     auto_assign_max_jobs: number;
     auto_assign_on_duty_only: boolean;
     attendance: { geofence: 'off' | 'flag' | 'enforce'; geofence_technicians: boolean; require_location: boolean };
+    jobs?: { require_signature: boolean };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -212,6 +213,12 @@ function Preferences({ data }: { data: SettingsData }) {
             note={!data.features.online_payments ? 'Not included in your plan.' : undefined}
           />
           <Row title="Strict daily cash close" desc="Technicians must close earlier days before closing today. Admins can always force-close." checked={s.strict_cash_close} onChange={(v) => setS({ ...s, strict_cash_close: v })} />
+          <Row
+            title="Require customer signature"
+            desc="Technicians must take the customer’s signature in the app before marking a visit completed. It is printed on the invoice. When off, signing is optional."
+            checked={!!s.jobs?.require_signature}
+            onChange={(v) => setS({ ...s, jobs: { ...s.jobs, require_signature: v } })}
+          />
           <Row title="Customer portal" desc="Customers sign in with their phone + OTP to raise requests, track jobs and download invoices." checked={s.customer_portal} onChange={(v) => setS({ ...s, customer_portal: v })} disabled={!data.features.customer_portal} />
         </div>
       </Card>

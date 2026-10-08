@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { MapPin } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useListQuery } from '@/lib/hooks';
@@ -9,6 +10,7 @@ import { Card, EmptyState, Pagination, SearchInput, Tabs } from '@/components/ui
 import { PriorityBadge, StatusBadge } from '@/components/domain';
 
 export default function TechJobs() {
+  const { t } = useTranslation();
   // Default tab is "Open"; a search looks across every status.
   const list = useListQuery<Job>('tech-jobs', '/jobs', { sort: 'scheduled' }, (f) => ({ ...f, status: f.search ? undefined : f.status ?? 'open' }));
   const counts = useQuery({ queryKey: ['tech-job-counts'], queryFn: () => api.get<Envelope<Record<JobStatus, number>>>('/jobs/counts').then((r) => r.data) });
@@ -16,21 +18,21 @@ export default function TechJobs() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-4 text-xl font-semibold">My jobs</h1>
-      <SearchInput value={list.filters.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder="Call ID, phone, serial or CRM ID" className="mb-3" />
+      <h1 className="mb-4 text-xl font-bold text-navy-900">{t('nav.myJobs')}</h1>
+      <SearchInput value={list.filters.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder={t('tech.searchJobs')} className="mb-3" />
       {!list.filters.search && (
         <Tabs
           className="mb-3"
           value={status}
           onChange={(v) => list.setFilter('status', v)}
-          tabs={(['open', 'in_progress', 'pending', 'completed'] as JobStatus[]).map((s) => ({ value: s, label: { open: 'Open', in_progress: 'In progress', pending: 'Pending', completed: 'Completed', cancelled: 'Cancelled' }[s], count: counts.data?.[s] }))}
+          tabs={(['open', 'in_progress', 'pending', 'completed'] as JobStatus[]).map((s) => ({ value: s, label: t(`status.${s}`), count: counts.data?.[s] }))}
         />
       )}
       <Card padded={false}>
         {list.isLoading ? (
           <div className="h-40 animate-pulse" />
         ) : !list.data?.data.length ? (
-          <EmptyState title="No jobs here" message="New assignments appear here and as notifications." />
+          <EmptyState title={t('tech.noJobs')} message={t('tech.noJobsHint')} />
         ) : (
           <ul className="divide-y divide-slate-100">
             {list.data.data.map((j) => (

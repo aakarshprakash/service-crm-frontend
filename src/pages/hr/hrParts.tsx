@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import i18n from 'i18next';
 import { api } from '@/lib/api';
 import { fieldError, useApiMutation } from '@/lib/hooks';
 import { date, today } from '@/lib/format';
@@ -36,7 +37,7 @@ export function thisMonth(offset = 0): string {
 
 export function monthName(month: string): string {
   const [y, m] = month.split('-').map(Number) as [number, number];
-  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  return new Date(y, m - 1, 1).toLocaleDateString(`${i18n.language || 'en'}-IN`, { month: 'long', year: 'numeric' });
 }
 
 export function num(n: number): string {

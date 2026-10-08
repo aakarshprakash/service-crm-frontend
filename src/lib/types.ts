@@ -14,6 +14,7 @@ export interface TenantInfo {
   online_payments: boolean;
   portal_enabled: boolean;
   tutorial_mode: boolean;
+  require_signature?: boolean;
 }
 
 export interface AuthUser {
@@ -75,6 +76,8 @@ export interface CustomerProduct {
 
 export interface Visit {
   id: number;
+  signer_name?: string | null;
+  signed_at?: string | null;
   job_id: number;
   technician_id: number;
   visit_date: string;

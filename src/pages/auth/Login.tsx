@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { ShieldCheck } from 'lucide-react';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, Input } from '@/components/ui';
@@ -9,6 +10,7 @@ import { safeNext } from '@/lib/utils';
 import type { AuthUser } from '@/lib/types';
 
 export default function Login() {
+  const { t } = useTranslation();
   const { setUser } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -34,7 +36,7 @@ export default function Login() {
       setUser(user);
       navigate(safeNext(params.get('next'), homePath(user)), { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err : new ApiError(0, 'Unable to sign in.'));
+      setError(err instanceof ApiError ? err : new ApiError(0, t('auth.login.failed')));
     } finally {
       setLoading(false);
     }
@@ -42,8 +44,8 @@ export default function Login() {
 
   return (
     <AuthLayout
-      title={needsCode ? 'Two-step verification' : 'Welcome back'}
-      subtitle={needsCode ? 'Enter the 6-digit code from your authenticator app.' : 'Sign in to manage your service operations.'}
+      title={needsCode ? t('auth.login.twoFactorTitle') : t('auth.login.title')}
+      subtitle={needsCode ? t('auth.login.twoFactorSubtitle') : t('auth.login.subtitle')}
     >
       <form onSubmit={submit} className="space-y-5" noValidate>
         {error && !error.field('email') && !error.field('code') && (
@@ -53,15 +55,15 @@ export default function Login() {
         )}
         {!needsCode ? (
           <>
-            <Field label="Email" error={error?.field('email')} htmlFor="email">
+            <Field label={t('auth.email')} error={error?.field('email')} htmlFor="email">
               <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} invalid={!!error?.field('email')} autoFocus />
             </Field>
             <Field
               label={
                 <span className="flex items-center justify-between">
-                  Password
-                  <Link to="/forgot-password" className="text-xs font-medium text-brand-700 hover:underline">
-                    Forgot password?
+                  {t('auth.password')}
+                  <Link to="/forgot-password" className="text-xs font-medium text-brand-600 hover:underline">
+                    {t('auth.login.forgot')}
                   </Link>
                 </span>
               }
@@ -72,7 +74,7 @@ export default function Login() {
             </Field>
           </>
         ) : (
-          <Field label="Authentication code" error={error?.field('code')} htmlFor="code">
+          <Field label={t('auth.login.code')} error={error?.field('code')} htmlFor="code">
             <div className="relative">
               <ShieldCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
@@ -89,11 +91,11 @@ export default function Login() {
           </Field>
         )}
         <Button type="submit" className="w-full" size="lg" loading={loading}>
-          {needsCode ? 'Verify and sign in' : 'Sign in'}
+          {needsCode ? t('auth.login.verify') : t('auth.login.submit')}
         </Button>
         {needsCode && (
           <button type="button" className="w-full text-center text-sm text-slate-500 hover:text-slate-700" onClick={() => { setNeedsCode(false); setCode(''); }}>
-            Use a different account
+            {t('auth.login.otherAccount')}
           </button>
         )}
       </form>

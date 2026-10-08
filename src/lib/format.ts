@@ -3,9 +3,13 @@
  * currency unit (paise / cents); dates are UTC and shown in the tenant timezone.
  */
 
+import i18n from 'i18next';
+
 let currency = 'INR';
 let timeZone: string | undefined;
+/** Money keeps Indian English grouping (₹1,25,000.00) in every language; dates follow the UI language. */
 const locale = 'en-IN';
+const dateLocale = () => `${i18n.language || 'en'}-IN`;
 
 export function configureFormatting(opts: { currency?: string; timezone?: string }) {
   if (opts.currency) currency = opts.currency;
@@ -45,28 +49,29 @@ export function date(value: string | null | undefined): string {
   if (!value) return '–';
   const d = new Date(value.length === 10 ? value + 'T00:00:00' : value);
   if (Number.isNaN(d.getTime())) return '–';
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric', timeZone: value.length === 10 ? undefined : timeZone }).format(d);
+  return new Intl.DateTimeFormat(dateLocale(), { day: '2-digit', month: 'short', year: 'numeric', timeZone: value.length === 10 ? undefined : timeZone }).format(d);
 }
 
 export function dateTime(value: string | null | undefined): string {
   if (!value) return '–';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '–';
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', timeZone }).format(d);
+  return new Intl.DateTimeFormat(dateLocale(), { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', timeZone }).format(d);
 }
 
 export function time(value: string | null | undefined): string {
   if (!value) return '–';
-  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone }).format(new Date(value));
+  return new Intl.DateTimeFormat(dateLocale(), { hour: 'numeric', minute: '2-digit', timeZone }).format(new Date(value));
 }
 
 export function relative(value: string | null | undefined): string {
   if (!value) return '';
   const diff = (Date.now() - new Date(value).getTime()) / 1000;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)}d ago`;
+  const rtf = new Intl.RelativeTimeFormat(dateLocale(), { numeric: 'auto', style: 'short' });
+  if (diff < 60) return rtf.format(0, 'second');
+  if (diff < 3600) return rtf.format(-Math.floor(diff / 60), 'minute');
+  if (diff < 86400) return rtf.format(-Math.floor(diff / 3600), 'hour');
+  if (diff < 7 * 86400) return rtf.format(-Math.floor(diff / 86400), 'day');
   return date(value);
 }
 
@@ -108,6 +113,9 @@ export function qty(value: number | string | null | undefined): string {
 
 export function label(value: string | null | undefined): string {
   if (!value) return '–';
+  // Known codes (service types, warranty types…) are translated; anything else is title-cased.
+  const key = `label.${value}`;
+  if (i18n.exists(key)) return i18n.t(key);
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

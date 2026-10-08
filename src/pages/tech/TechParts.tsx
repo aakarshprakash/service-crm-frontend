@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { api, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { label, money, qty } from '@/lib/format';
@@ -8,6 +9,7 @@ import { Badge, Card, EmptyState, Modal, SearchInput, Spinner, Tabs } from '@/co
 
 /** FR-7.5: search spares / consumables and check availability across branches. */
 export default function TechParts() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [type, setType] = useState<'' | 'spare' | 'consumable'>('');
@@ -19,16 +21,16 @@ export default function TechParts() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-3">
-      <h1 className="text-xl font-semibold">Spare inventory</h1>
-      <SearchInput value={search} onChange={setSearch} placeholder="Search by code or name" />
-      <Tabs value={type} onChange={setType} tabs={[{ value: '', label: 'All' }, { value: 'spare', label: 'Spares' }, { value: 'consumable', label: 'Consumables' }]} />
+      <h1 className="text-xl font-bold text-navy-900">{t('tech.spareInventory')}</h1>
+      <SearchInput value={search} onChange={setSearch} placeholder={t('tech.searchParts')} />
+      <Tabs value={type} onChange={setType} tabs={[{ value: '', label: t('common.all') }, { value: 'spare', label: t('tech.spares') }, { value: 'consumable', label: t('tech.consumables') }]} />
       <Card padded={false}>
         {q.isLoading ? (
           <div className="flex justify-center py-10">
             <Spinner />
           </div>
         ) : !q.data?.data.length ? (
-          <EmptyState title="No items found" />
+          <EmptyState title={t('tech.noParts')} />
         ) : (
           <ul className="divide-y divide-slate-100">
             {q.data.data.map((i) => {
@@ -52,13 +54,14 @@ export default function TechParts() {
           </ul>
         )}
       </Card>
-      <p className="text-center text-xs text-slate-500">Stock shown is for your branch. Tap an item to see other branches.</p>
+      <p className="text-center text-xs text-slate-500">{t('tech.partsHint')}</p>
       {open && <Availability item={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }
 
 function Availability({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
+  const { t } = useTranslation();
   const q = useQuery({
     queryKey: ['availability', item.code],
     queryFn: () => api.get<Envelope<{ branches: { branch_id: number; branch: string; quantity: number }[] }>>(`/inventory/items/${encodeURIComponent(item.code)}/availability`).then((r) => r.data.branches),
@@ -68,7 +71,7 @@ function Availability({ item, onClose }: { item: InventoryItem; onClose: () => v
       {q.isLoading ? (
         <Spinner />
       ) : !q.data?.length ? (
-        <p className="text-sm text-slate-500">Not stocked at any branch.</p>
+        <p className="text-sm text-slate-500">{t('tech.notStocked')}</p>
       ) : (
         <ul className="divide-y divide-slate-100 text-sm">
           {q.data.map((b) => (

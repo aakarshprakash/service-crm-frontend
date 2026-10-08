@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight, ClipboardList, LogIn, LogOut, MapPin, Package, PlayCircle, Wallet, Wrench } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
@@ -22,6 +23,7 @@ interface TechDashboard {
 }
 
 export default function TechHome() {
+  const { t } = useTranslation();
   const { user, refresh } = useAuth();
   const navigate = useNavigate();
   const q = useQuery({ queryKey: ['tech-dashboard'], queryFn: () => api.get<Envelope<TechDashboard>>('/dashboard/technician').then((r) => r.data), refetchInterval: 60_000 });
@@ -34,36 +36,34 @@ export default function TechHome() {
   );
   const d = q.data;
   const tiles = [
-    { key: 'open', label: 'Open', tone: 'bg-sky-50 text-sky-800 border-sky-100' },
-    { key: 'in_progress', label: 'In Progress', tone: 'bg-violet-50 text-violet-800 border-violet-100' },
-    { key: 'pending', label: 'Pending', tone: 'bg-amber-50 text-amber-900 border-amber-100' },
-    { key: 'completed', label: 'Completed', tone: 'bg-emerald-50 text-emerald-800 border-emerald-100' },
+    { key: 'open', label: t('status.open'), tone: 'bg-brand-50 text-brand-800 border-brand-100' },
+    { key: 'in_progress', label: t('status.in_progress'), tone: 'bg-violet-50 text-violet-800 border-violet-100' },
+    { key: 'pending', label: t('status.pending'), tone: 'bg-amber-50 text-amber-900 border-amber-100' },
+    { key: 'completed', label: t('status.completed'), tone: 'bg-accent-50 text-accent-800 border-accent-100' },
   ] as const;
 
   return (
     <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
       {d && (
         <div className="mx-auto max-w-2xl space-y-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-slate-500">Hello,</p>
-              <h1 className="text-xl font-semibold">{user?.name}</h1>
-              <p className="text-xs text-slate-500">{d.punch_status === 'in' ? `On duty since ${time(d.punched_at)}` : 'You are off duty'}</p>
+          <div className="relative flex items-center justify-between gap-3 overflow-hidden rounded-2xl bg-navy-900 p-5 text-white shadow-lift">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_120%_at_0%_0%,rgba(37,99,235,0.45),transparent_60%),radial-gradient(60%_100%_at_100%_100%,rgba(16,185,129,0.3),transparent_60%)]" />
+            <div className="relative">
+              <p className="text-sm text-slate-300">{t('tech.hello')}</p>
+              <h1 className="text-xl font-bold">{user?.name}</h1>
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-300">
+                <span className={d.punch_status === 'in' ? 'h-2 w-2 rounded-full bg-accent-400' : 'h-2 w-2 rounded-full bg-slate-500'} />
+                {d.punch_status === 'in' ? t('tech.onDutySince', { time: time(d.punched_at) }) : t('tech.offDuty')}
+              </p>
             </div>
-            <Hint
-              text={
-                d.punch_status === 'in'
-                  ? 'Ends your working day. The time is recorded (with your location, if your phone shares it), and the office sees you as off duty.'
-                  : 'Starts your working day. The time is recorded (with your location, if your phone shares it), and the office sees you as on duty when assigning jobs.'
-              }
-            >
+            <Hint className="relative" text={d.punch_status === 'in' ? t('tech.punchOutHint') : t('tech.punchInHint')}>
               {d.punch_status === 'in' ? (
                 <Button variant="secondary" icon={<LogOut className="h-4 w-4" />} loading={punch.isPending} onClick={() => punch.mutate('out')}>
-                  Punch out
+                  {t('punch.out')}
                 </Button>
               ) : (
                 <Button variant="success" icon={<LogIn className="h-4 w-4" />} loading={punch.isPending} onClick={() => punch.mutate('in')}>
-                  Punch in
+                  {t('punch.in')}
                 </Button>
               )}
             </Hint>
@@ -73,42 +73,42 @@ export default function TechHome() {
             <button onClick={() => navigate(`/tech/jobs/${d.active_visit!.job_id}`)} className="flex w-full items-center gap-3 rounded-xl bg-violet-600 p-4 text-left text-white shadow-lg">
               <PlayCircle className="h-8 w-8 shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-semibold">Service in progress · {d.active_visit.job.crm_call_id}</p>
-                <p className="text-xs text-violet-100">Started {dateTime(d.active_visit.start_time)} — tap to continue</p>
+                <p className="text-sm font-semibold">{t('tech.inProgress', { call: d.active_visit.job.crm_call_id })}</p>
+                <p className="text-xs text-violet-100">{t('tech.startedTapToContinue', { time: dateTime(d.active_visit.start_time) })}</p>
               </div>
               <ChevronRight className="h-5 w-5" />
             </button>
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            {tiles.map((t) => (
-              <Link key={t.key} to={`/tech/jobs?status=${t.key}`} className={`rounded-xl border p-4 ${t.tone}`}>
-                <p className="text-3xl font-bold tabular-nums">{d.counts[t.key]}</p>
-                <p className="text-sm font-medium">{t.label}</p>
+            {tiles.map((tile) => (
+              <Link key={tile.key} to={`/tech/jobs?status=${tile.key}`} className={`rounded-xl border p-4 transition hover:shadow-card ${tile.tone}`}>
+                <p className="text-3xl font-bold tabular-nums">{d.counts[tile.key]}</p>
+                <p className="text-sm font-medium">{tile.label}</p>
               </Link>
             ))}
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <Link to="/tech/jobs" className="flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-white p-3 text-center text-xs font-medium text-slate-700 shadow-card">
-              <ClipboardList className="h-6 w-6 text-brand-700" /> Customer services
+              <ClipboardList className="h-6 w-6 text-brand-600" /> {t('tech.customerServices')}
             </Link>
             <Link to="/tech/parts" className="flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-white p-3 text-center text-xs font-medium text-slate-700 shadow-card">
-              <Package className="h-6 w-6 text-brand-700" /> Spare inventory
+              <Package className="h-6 w-6 text-brand-600" /> {t('tech.spareInventory')}
             </Link>
             <Link to="/tech/cash" className="flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-white p-3 text-center text-xs font-medium text-slate-700 shadow-card">
-              <Wallet className="h-6 w-6 text-brand-700" /> Cash close
+              <Wallet className="h-6 w-6 text-brand-600" /> {t('tech.cashClose')}
             </Link>
           </div>
 
           <Card>
             <div className="grid grid-cols-2 divide-x divide-slate-100 text-center">
               <div>
-                <p className="text-xs text-slate-500">Collected today</p>
+                <p className="text-xs text-slate-500">{t('tech.collectedToday')}</p>
                 <p className="text-lg font-semibold tabular-nums">{money(d.collected_today)}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Cash in hand</p>
+                <p className="text-xs text-slate-500">{t('tech.cashInHand')}</p>
                 <p className="text-lg font-semibold tabular-nums">{money(d.cash_in_hand)}</p>
               </div>
             </div>
@@ -116,9 +116,9 @@ export default function TechHome() {
 
           <MyAssets />
 
-          <Card title="Today & overdue" padded={false}>
+          <Card title={t('tech.todayOverdue')} padded={false}>
             {!d.today.length ? (
-              <p className="px-5 py-8 text-center text-sm text-slate-500">No visits scheduled for today. 🎉</p>
+              <p className="px-5 py-8 text-center text-sm text-slate-500">{t('tech.noVisitsToday')}</p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {d.today.map((j) => (
@@ -129,7 +129,7 @@ export default function TechHome() {
                           <span className="text-sm font-semibold">{j.crm_call_id}</span>
                           <PriorityBadge priority={j.priority} />
                         </div>
-                        <p className="truncate text-sm text-slate-700">{j.customer?.name} · {j.complaint_type?.name ?? 'Service'}</p>
+                        <p className="truncate text-sm text-slate-700">{j.customer?.name} · {j.complaint_type?.name ?? t('tech.service')}</p>
                         <p className="flex items-center gap-1 truncate text-xs text-slate-500">
                           <MapPin className="h-3 w-3" /> {[j.customer?.address, j.customer?.city].filter(Boolean).join(', ')}
                         </p>
@@ -156,10 +156,11 @@ type MyAsset = Pick<Asset, 'id' | 'asset_code' | 'name' | 'category' | 'brand' |
 
 /** Company tools / devices currently issued to this technician. Hidden when they hold none. */
 function MyAssets() {
+  const { t } = useTranslation();
   const q = useQuery({ queryKey: ['my-assets'], queryFn: () => api.get<Envelope<MyAsset[]>>('/my/assets').then((r) => r.data) });
   if (!q.data?.length) return null;
   return (
-    <Card title={`My assets (${q.data.length})`} padded={false}>
+    <Card title={t('tech.myAssets', { count: q.data.length })} padded={false}>
       <ul className="divide-y divide-slate-100">
         {q.data.map((a) => (
           <li key={a.id} className="flex items-center gap-3 px-4 py-3">
@@ -168,8 +169,8 @@ function MyAssets() {
               <p className="truncate text-sm font-medium">{a.name}</p>
               <p className="truncate text-xs text-slate-500">
                 {a.asset_code}
-                {a.serial_no && ` · SN ${a.serial_no}`}
-                {a.current_assignment && ` · since ${date(a.current_assignment.issued_at)}`}
+                {a.serial_no && ` · ${t('common.sn')} ${a.serial_no}`}
+                {a.current_assignment && ` · ${t('tech.since', { date: date(a.current_assignment.issued_at) })}`}
               </p>
             </div>
           </li>

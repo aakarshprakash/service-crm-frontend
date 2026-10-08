@@ -1,13 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, PackagePlus, UserPlus, X } from 'lucide-react';
 import { api, ApiError, type Envelope, type Paginated } from '@/lib/api';
 import { useLookups, useStaffOptions } from '@/lib/hooks';
 import { fromLocalInput } from '@/lib/format';
 import type { Customer, CustomerProduct, Job } from '@/lib/types';
-import { Button, Card, Checkbox, Field, Input, PageHeader, SearchInput, Select, Textarea, toast } from '@/components/ui';
-import { CustomerForm, type CustomerDraft, emptyCustomer } from '@/pages/customers/CustomerForm';
+import { Button, Card, Checkbox, Combobox, Field, Input, PageHeader, SearchInput, Select, Textarea, toast } from '@/components/ui';
+import { CustomerForm, ProductFields, emptyProduct, productPayload, type CustomerDraft, type ProductDraft, emptyCustomer } from '@/pages/customers/CustomerForm';
 import { Hint } from '@/components/tutorial';
 
 export default function JobCreate() {
@@ -42,6 +42,11 @@ export default function JobCreate() {
   }, [suggested?.id]);
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
+  // A product the customer owns but that isn't on their record yet.
+  const [newProduct, setNewProduct] = useState<ProductDraft | null>(null);
+  const [productError, setProductError] = useState<ApiError | null>(null);
+  // Keeps a retry after a failed job save from creating the product twice.
+  const createdProduct = useRef<number | null>(null);
 
   // Preselect a customer when coming from the customer page.
   const preset = params.get('customer_id');
@@ -61,9 +66,32 @@ export default function JobCreate() {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setProductError(null);
     try {
       let customerId = customer?.id;
       let productId = job.customer_product_id ? Number(job.customer_product_id) : null;
+
+      // Register a product the existing customer owns but we don't have on file.
+      if (customer && newProduct) {
+        if (!newProduct.product_id && !newProduct.serial_no.trim()) {
+          setProductError(new ApiError(422, 'Add the product details.', { product_id: ['Pick a model, or enter the serial number.'] }));
+          return;
+        }
+        if (createdProduct.current) {
+          productId = createdProduct.current;
+        } else {
+          try {
+            const added = await api.post<Envelope<CustomerProduct>>(`/customers/${customer.id}/products`, productPayload(newProduct));
+            createdProduct.current = added.data.id;
+            productId = added.data.id;
+          } catch (err) {
+            setProductError(err as ApiError);
+            if (err instanceof ApiError && !Object.keys(err.errors).length) toast.error(err.message);
+            return;
+          }
+        }
+      }
+
       if (!customerId && newCustomer) {
         const { product, ...rest } = newCustomer;
         const created = await api.post<Envelope<Customer & { products: CustomerProduct[] }>>('/customers', {
@@ -130,20 +158,61 @@ export default function JobCreate() {
                     </p>
                     <p className="text-sm text-slate-500">{[customer.address, customer.city].filter(Boolean).join(', ')}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); set('customer_product_id', ''); }} aria-label="Change customer">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCustomer(null);
+                      set('customer_product_id', '');
+                      setNewProduct(null);
+                      setProductError(null);
+                      createdProduct.current = null;
+                    }}
+                    aria-label="Change customer"
+                  >
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <Field label="Product" error={f('customer_product_id')}>
-                  <Select value={job.customer_product_id} onChange={(e) => set('customer_product_id', e.target.value)}>
-                    <option value="">Not specified</option>
-                    {customer.products?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {[p.product?.brand?.name, p.product?.model_name].filter(Boolean).join(' ') || 'Product'} {p.serial_no ? `· SN ${p.serial_no}` : ''}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                {!newProduct ? (
+                  <Field
+                    label="Product"
+                    error={f('customer_product_id')}
+                    hint={customer.products?.length ? undefined : 'No products on this customer’s record yet.'}
+                  >
+                    <div className="flex gap-2">
+                      <Combobox
+                        className="flex-1"
+                        value={job.customer_product_id}
+                        onChange={(v) => set('customer_product_id', v)}
+                        options={(customer.products ?? []).map((p) => ({
+                          value: String(p.id),
+                          label: [p.product?.brand?.name, p.product?.model_name].filter(Boolean).join(' ') || 'Product',
+                          hint: [p.serial_no && `SN ${p.serial_no}`, p.under_warranty !== undefined && (p.under_warranty ? 'In warranty' : 'Out of warranty')].filter(Boolean).join(' · ') || undefined,
+                        }))}
+                        placeholder="Not specified"
+                        searchPlaceholder="Search model or serial…"
+                        emptyText="This customer has no other product on record."
+                        aria-label="Product"
+                      />
+                      <Hint text="Use this when the complaint is about a unit that isn’t on the customer’s record yet. It’s added to their products when you create the job.">
+                        <Button variant="outline" icon={<PackagePlus className="h-4 w-4" />} onClick={() => { setNewProduct({ ...emptyProduct }); set('customer_product_id', ''); }}>
+                          Another product
+                        </Button>
+                      </Hint>
+                    </div>
+                  </Field>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-slate-700">New product for {customer.name}</p>
+                      <Button variant="ghost" size="sm" onClick={() => { setNewProduct(null); setProductError(null); }}>
+                        Pick an existing one instead
+                      </Button>
+                    </div>
+                    <ProductFields value={newProduct} onChange={setNewProduct} error={productError} title={null} />
+                    <p className="text-xs text-slate-500">Saved to this customer’s products when you create the job.</p>
+                  </div>
+                )}
               </div>
             ) : newCustomer ? (
               <div>

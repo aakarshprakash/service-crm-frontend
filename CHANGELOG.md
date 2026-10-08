@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Languages:** English, हिन्दी (Hindi) and മലയാളം (Malayalam), switchable from the header, the account menu or the sign-in page; the choice is remembered per browser. Dates and "5 min ago" follow the language; money keeps ₹ Indian grouping. Translated so far: navigation, header, sign-in / password pages, dashboard, all technician screens, My HR, shared controls (tables, pagination, dialogs, search, dropdowns), statuses, payment methods and roles. Other pages fall back to English.
+- **Customer signature:** technicians can take the customer's signature on the Summary tab (finger, pen or mouse); shown on the job page and printed on the invoice. Settings → Preferences → **Require customer signature** makes it mandatory before a visit is completed.
+- **Searchable dropdown** (`Combobox`) for product model, dealer and action taken; new jobs can add a product the customer owns that isn't on their record yet.
+
+### Changed
+- **Servon brand styleboard applied:** Electric Blue `#2563EB` primary, Deep Navy `#0B2545` sidebar, Teal Green `#10B981` accents, Inter + Noto Sans Devanagari / Malayalam, new logo mark, favicon and sign-in page.
+- **Sidebar** grouped into Service, Finance, Stock & assets, People, Insights and Administration; collapses to an icon rail on desktop (remembered); new account menu in the header.
+
 ## 2.1.0 — 2026-10-06
 
 ### Added

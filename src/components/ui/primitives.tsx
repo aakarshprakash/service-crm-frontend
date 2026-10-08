@@ -1,17 +1,21 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { Loader2 } from 'lucide-react';
+import {
+  forwardRef, useEffect, useMemo, useRef, useState,
+  type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes,
+} from 'react';
+import { useTranslation } from 'react-i18next';
+import { ChevronDown, Loader2, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
 type Size = 'sm' | 'md' | 'lg';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-brand-700 text-white hover:bg-brand-800 focus-visible:ring-brand-500 shadow-sm',
+  primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500 shadow-sm',
   secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:ring-brand-500 shadow-sm',
-  outline: 'bg-transparent text-brand-700 border border-brand-300 hover:bg-brand-50 focus-visible:ring-brand-500',
+  outline: 'bg-transparent text-brand-700 border border-brand-200 hover:bg-brand-50 focus-visible:ring-brand-500',
   ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-brand-500',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500 shadow-sm',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 shadow-sm',
+  success: 'bg-accent-500 text-white hover:bg-accent-600 focus-visible:ring-accent-500 shadow-sm',
 };
 const sizes: Record<Size, string> = {
   sm: 'h-8 px-3 text-xs gap-1.5',
@@ -69,6 +73,196 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     </select>
   );
 });
+
+export interface ComboboxOption {
+  value: string;
+  label: string;
+  /** Secondary line under the label, e.g. a serial number or category. */
+  hint?: string;
+  /** Options sharing a group are listed under one heading. */
+  group?: string;
+}
+
+/**
+ * Searchable single-select ("select2" style): type to filter, arrow keys to move,
+ * Enter to pick, Escape to close. Use instead of <Select> once a list grows past
+ * ~15 options. `footer` holds an action such as "Add a new product".
+ */
+export function Combobox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+  emptyText,
+  invalid,
+  disabled,
+  clearable = true,
+  footer,
+  className,
+  'aria-label': ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: ComboboxOption[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyText?: ReactNode;
+  invalid?: boolean;
+  disabled?: boolean;
+  clearable?: boolean;
+  footer?: ReactNode;
+  className?: string;
+  'aria-label'?: string;
+}) {
+  const { t } = useTranslation();
+  placeholder ??= t('common.select');
+  searchPlaceholder ??= t('common.typeToSearch');
+  emptyText ??= t('common.noMatch');
+  const [open, setOpen] = useState(false);
+  const [term, setTerm] = useState('');
+  const [active, setActive] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const selected = options.find((o) => o.value === value);
+
+  const filtered = useMemo(() => {
+    const t = term.trim().toLowerCase();
+    if (!t) return options;
+    return options.filter((o) => `${o.label} ${o.hint ?? ''} ${o.group ?? ''}`.toLowerCase().includes(t));
+  }, [options, term]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => root.current && !root.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setTerm('');
+    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    const t = setTimeout(() => search.current?.focus(), 10);
+    return () => clearTimeout(t);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the highlighted row visible while arrowing through a long list.
+  useEffect(() => {
+    list.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [active, open]);
+
+  const pick = (option: ComboboxOption) => {
+    onChange(option.value);
+    setOpen(false);
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const option = filtered[active];
+      if (option) pick(option);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === 'Tab') {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className={cn('relative', className)} ref={root} onKeyDown={onKeyDown}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        className={cn(control, 'flex h-10 items-center gap-2 text-left', invalid && 'border-red-400', disabled && 'cursor-not-allowed')}
+      >
+        <span className={cn('flex-1 truncate', !selected && 'text-slate-400')}>{selected?.label ?? placeholder}</span>
+        {clearable && selected && !disabled && (
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-label={t('common.clear')}
+            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange('');
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </span>
+        )}
+        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl animate-fade-in">
+          <div className="border-b border-slate-100 p-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                ref={search}
+                value={term}
+                onChange={(e) => {
+                  setTerm(e.target.value);
+                  setActive(0);
+                }}
+                placeholder={searchPlaceholder}
+                className={cn(control, 'h-9 pl-8')}
+              />
+            </div>
+          </div>
+          <ul ref={list} role="listbox" className="scroll-light max-h-60 overflow-y-auto py-1">
+            {filtered.map((option, i) => {
+              const heading = option.group && option.group !== filtered[i - 1]?.group;
+              return (
+                <li key={option.value}>
+                  {heading && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{option.group}</p>}
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={option.value === value}
+                    data-active={i === active}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => pick(option)}
+                    className={cn(
+                      'block w-full px-3 py-2 text-left text-sm',
+                      i === active && 'bg-slate-50',
+                      option.value === value && 'bg-brand-50 font-medium text-brand-800',
+                    )}
+                  >
+                    {option.label}
+                    {option.hint && <span className="block text-xs font-normal text-slate-500">{option.hint}</span>}
+                  </button>
+                </li>
+              );
+            })}
+            {!filtered.length && <li className="px-3 py-6 text-center text-sm text-slate-500">{emptyText}</li>}
+          </ul>
+          {footer && <div className="border-t border-slate-100 p-1.5">{footer}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(function Textarea(
   { className, invalid, rows = 3, ...props },

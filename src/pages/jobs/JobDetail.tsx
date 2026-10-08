@@ -19,6 +19,7 @@ export default function JobDetail() {
   const job = q.data;
   const manage = can('jobs.manage') && job && !['completed', 'cancelled'].includes(job.status);
   const lastVisit = job?.visits?.[job.visits.length - 1];
+  const photos = job?.images?.filter((i) => i.type !== 'signature') ?? [];
 
   return (
     <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
@@ -159,6 +160,20 @@ export default function JobDetail() {
                             ))}
                           </ul>
                         )}
+                        {(() => {
+                          const sig = job.images?.find((i) => i.type === 'signature' && i.job_visit_id === v.id);
+                          return sig ? (
+                            <div className="flex items-end gap-3">
+                              <a href={sig.url} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-slate-200 bg-white p-1">
+                                <img src={sig.url} alt="Customer signature" className="h-14 w-36 object-contain" />
+                              </a>
+                              <p className="pb-1 text-xs text-slate-600">
+                                Signed by <span className="font-medium text-slate-900">{v.signer_name ?? 'customer'}</span>
+                                {v.signed_at && <> · {dateTime(v.signed_at)}</>}
+                              </p>
+                            </div>
+                          ) : null;
+                        })()}
                         {v.status !== 'in_progress' && (
                           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
                             <span>Labour {money(v.labour_charge)}</span>
@@ -176,10 +191,10 @@ export default function JobDetail() {
                 )}
               </Card>
 
-              {!!job.images?.length && (
-                <Card title={`Photos (${job.images.length})`}>
+              {!!photos.length && (
+                <Card title={`Photos (${photos.length})`}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {job.images.map((img) => (
+                    {photos.map((img) => (
                       <a key={img.id} href={img.url} target="_blank" rel="noopener noreferrer" className="group overflow-hidden rounded-lg border border-slate-200">
                         <img src={img.url} alt={label(img.type)} loading="lazy" className="aspect-square w-full object-cover transition group-hover:scale-105" />
                         <p className="bg-white px-2 py-1 text-xs text-slate-600">{label(img.type)}</p>
