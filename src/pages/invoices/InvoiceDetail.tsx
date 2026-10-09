@@ -261,8 +261,8 @@ export function RecordPayment({ invoice, open, onClose, technician }: { invoice:
         </Field>
         {needsRef && (
           <Field
-            label={form.method === 'cheque' ? 'Cheque number' : form.method === 'upi' ? 'UPI transaction ref.' : 'Bank reference / UTR'}
-            required
+            label={form.method === 'cheque' ? 'Cheque number' : form.method === 'upi' ? 'UPI transaction ref. (optional)' : 'Bank reference / UTR'}
+            required={form.method !== 'upi'}
             className="sm:col-span-2"
             error={fieldError(m.error, 'reference_no')}
           >

@@ -52,6 +52,8 @@ export interface Customer {
   pincode: string | null;
   lat: number | null;
   lng: number | null;
+  location_updated_at?: string | null;
+  location_source?: 'customer' | 'office' | 'technician' | null;
   branch_id: number | null;
   branch?: Named | null;
   jobs_count?: number;
@@ -110,6 +112,37 @@ export interface Usage {
   unit_price: number;
   total_price: number;
   item?: { id: number; code: string; name: string; type: string; unit_of_measure: string };
+}
+
+export interface VoiceNote {
+  id: number;
+  job_visit_id: number | null;
+  duration_seconds: number;
+  url: string;
+  created_at: string;
+  uploader?: Named | null;
+}
+
+export interface ExpenseClaim {
+  id: number;
+  user_id: number;
+  job_id: number | null;
+  expense_category_id: number;
+  claim_date: string;
+  amount: number;
+  paid_from: 'cash_in_hand' | 'own_money';
+  description: string | null;
+  receipt_url: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  decided_at: string | null;
+  decision_note: string | null;
+  cash_close_id: number | null;
+  created_at: string;
+  user?: Named & { role?: string };
+  category?: Named | null;
+  job?: { id: number; crm_call_id: string } | null;
+  decider?: Named | null;
+  cash_close?: { id: number; close_date: string; status: string } | null;
 }
 
 export interface JobImage {
@@ -204,6 +237,7 @@ export interface Job {
   creator?: Named | null;
   visits?: Visit[];
   images?: JobImage[];
+  voice_notes?: VoiceNote[];
   status_history?: { id: number; status: JobStatus; remarks: string | null; changed_at: string; user?: Named | null }[];
   invoice?: Invoice | null;
   review?: { rating: number; comment: string | null } | null;

@@ -8,7 +8,8 @@ import { fieldError, useApiMutation, useStaffOptions } from '@/lib/hooks';
 import { date, dateTime, duration, fromLocalInput, label, money, qty, toLocalInput } from '@/lib/format';
 import type { Job } from '@/lib/types';
 import { Badge, Button, Card, ConfirmDialog, DefinitionList, Field, Input, Modal, PageHeader, QueryState, Select, Textarea } from '@/components/ui';
-import { MapEmbed, MethodLabel, PriorityBadge, Section, StatusBadge, Stars } from '@/components/domain';
+import { MethodLabel, PriorityBadge, Section, StatusBadge, Stars } from '@/components/domain';
+import { CustomerLocationCard } from '@/components/CustomerLocation';
 import { Hint } from '@/components/tutorial';
 
 export default function JobDetail() {
@@ -160,6 +161,19 @@ export default function JobDetail() {
                             ))}
                           </ul>
                         )}
+                        {job.voice_notes?.some((n) => n.job_visit_id === v.id) && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500">Voice notes</p>
+                            {job.voice_notes
+                              .filter((n) => n.job_visit_id === v.id)
+                              .map((n) => (
+                                <div key={n.id} className="flex items-center gap-2">
+                                  <audio controls preload="none" src={n.url} className="h-9 w-full max-w-sm" />
+                                  <span className="shrink-0 text-xs text-slate-500">{duration(n.duration_seconds)}</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
                         {(() => {
                           const sig = job.images?.find((i) => i.type === 'signature' && i.job_visit_id === v.id);
                           return sig ? (
@@ -255,9 +269,7 @@ export default function JobDetail() {
                 )}
               </Card>
 
-              <Card title="Location">
-                <MapEmbed lat={lastVisit?.location_lat ?? job.customer?.lat} lng={lastVisit?.location_lng ?? job.customer?.lng} />
-              </Card>
+              <CustomerLocationCard job={job} canManage={!!manage} visitLat={lastVisit?.location_lat} visitLng={lastVisit?.location_lng} />
 
               {job.review && (
                 <Card title="Customer feedback">

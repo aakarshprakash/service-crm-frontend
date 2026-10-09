@@ -269,7 +269,7 @@ export default function WalkInBill() {
                 </Button>
               )}
               {needsRef && (
-                <Field label={method === 'cheque' ? 'Cheque number' : method === 'upi' ? 'UPI transaction ref.' : 'Bank reference / UTR'} required error={f('reference_no')}>
+                <Field label={method === 'cheque' ? 'Cheque number' : method === 'upi' ? 'UPI transaction ref. (optional)' : 'Bank reference / UTR'} required={method !== 'upi'} error={f('reference_no')}>
                   <Input value={reference} maxLength={100} onChange={(e) => setReference(e.target.value)} />
                 </Field>
               )}

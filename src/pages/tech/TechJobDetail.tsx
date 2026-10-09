@@ -781,7 +781,7 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
                   <Input inputMode="decimal" value={form.amount_collected === '' ? toMajor(due) : form.amount_collected} onChange={(ev) => setForm({ ...form, amount_collected: ev.target.value.replace(/[^\d.]/g, '') })} />
                 </Field>
                 {form.payment_method !== 'cash' && (
-                  <Field label={form.payment_method === 'cheque' ? t('job.chequeNo') : form.payment_method === 'upi' ? t('job.upiRef') : t('job.utrRef')} required error={e('reference_no')}>
+                  <Field label={form.payment_method === 'cheque' ? t('job.chequeNo') : form.payment_method === 'upi' ? t('job.upiRef') : t('job.utrRef')} required={form.payment_method !== 'upi'} error={e('reference_no')}>
                     <Input value={form.payment_reference} onChange={(ev) => setForm({ ...form, payment_reference: ev.target.value })} />
                   </Field>
                 )}

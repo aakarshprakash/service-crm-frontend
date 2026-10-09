@@ -98,6 +98,7 @@ function useNav(): NavSection[] {
             { to: '/accounts/receivables', label: t('nav.receivables'), show: accounts },
             { to: '/accounts/receipts', label: t('nav.receipts'), show: can('payments.record') },
             { to: '/accounts/expenses', label: t('nav.expenses'), show: can('expenses.manage') },
+            { to: '/accounts/expense-claims', label: t('nav.expenseClaims'), show: can('expenses.manage') },
             { to: '/accounts/cash-bank', label: t('nav.cashBank'), show: accounts },
             { to: '/accounts/books', label: t('nav.dayBook'), show: accounts },
             { to: '/accounts/profit-loss', label: t('nav.profitLoss'), show: accounts },

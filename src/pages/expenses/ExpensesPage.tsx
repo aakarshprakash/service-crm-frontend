@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fieldError, useApiMutation, useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
@@ -19,6 +21,11 @@ export default function ExpensesPage() {
   const f = list.filters;
   const total = list.data?.meta.total_amount as number | undefined;
   const byCategory = Object.entries((list.data?.meta.by_category as Record<string, number> | undefined) ?? {});
+  const claims = useQuery({
+    queryKey: ['expense-claims', { status: 'pending', per_page: '1' }],
+    queryFn: () => api.get<{ meta: { pending_count?: number; pending_amount?: number } }>('/expense-claims', { status: 'pending', per_page: 1 }),
+  });
+  const waiting = claims.data?.meta.pending_count ?? 0;
 
   return (
     <>
@@ -31,6 +38,14 @@ export default function ExpensesPage() {
           </Button>
         }
       />
+      {waiting > 0 && (
+        <Link to="/accounts/expense-claims" className="mb-4 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100">
+          <span>
+            <strong>{waiting}</strong> expense claim{waiting > 1 ? 's' : ''} from staff waiting for approval ({money(claims.data?.meta.pending_amount ?? 0)})
+          </span>
+          <span className="font-medium">Review →</span>
+        </Link>
+      )}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total (filtered)" value={money(total ?? 0)} tone="red" />
         {byCategory.slice(0, 3).map(([name, amount]) => (

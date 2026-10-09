@@ -22,6 +22,8 @@ const InvoicesPage = lazy(() => import('@/pages/invoices/InvoicesPage'));
 const InvoiceDetail = lazy(() => import('@/pages/invoices/InvoiceDetail'));
 const WalkInBill = lazy(() => import('@/pages/invoices/WalkInBill'));
 const ExpensesPage = lazy(() => import('@/pages/expenses/ExpensesPage'));
+const ExpenseClaimsPage = lazy(() => import('@/pages/expenses/ExpenseClaimsPage'));
+const ShareLocation = lazy(() => import('@/pages/public/ShareLocation'));
 const BooksPage = lazy(() => import('@/pages/books/BooksPage'));
 const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage'));
 const AssetDetail = lazy(() => import('@/pages/assets/AssetDetail'));
@@ -111,6 +113,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/pay/:token" element={<PayInvoice />} />
+            <Route path="/share-location/:token" element={<ShareLocation />} />
             <Route path="/portal/:slug/login" element={<PortalLogin />} />
             <Route path="/portal/:slug/*" element={<PortalApp />} />
 
@@ -131,6 +134,7 @@ export default function App() {
               <Route path="/accounts/receivables" element={<RequireAuth roles={ACCOUNTS}><ReceivablesPage /></RequireAuth>} />
               <Route path="/accounts/receipts" element={<RequireAuth roles={ACCOUNTS}><ReceiptsPage /></RequireAuth>} />
               <Route path="/accounts/expenses" element={<RequireAuth roles={ACCOUNTS}><ExpensesPage /></RequireAuth>} />
+              <Route path="/accounts/expense-claims" element={<RequireAuth roles={ACCOUNTS}><ExpenseClaimsPage /></RequireAuth>} />
               <Route path="/accounts/cash-bank" element={<RequireAuth roles={ACCOUNTS}><CashBankPage /></RequireAuth>} />
               <Route path="/accounts/books" element={<RequireAuth roles={ACCOUNTS}><BooksPage /></RequireAuth>} />
               <Route path="/accounts/profit-loss" element={<RequireAuth roles={ACCOUNTS}><ProfitLossPage /></RequireAuth>} />

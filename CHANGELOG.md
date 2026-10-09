@@ -5,6 +5,10 @@
 ### Added
 - **Languages:** English, हिन्दी (Hindi) and മലയാളം (Malayalam), switchable from the header, the account menu or the sign-in page; the choice is remembered per browser. Dates and "5 min ago" follow the language; money keeps ₹ Indian grouping. Translated so far: navigation, header, sign-in / password pages, dashboard, all technician screens, My HR, shared controls (tables, pagination, dialogs, search, dropdowns), statuses, payment methods and roles. Other pages fall back to English.
 - **Customer signature:** technicians can take the customer's signature on the Summary tab (finger, pen or mouse); shown on the job page and printed on the invoice. Settings → Preferences → **Require customer signature** makes it mandatory before a visit is completed.
+- **Expense claims** (Accounts → Expense claims): approve with receipt preview (choose how own-money claims were reimbursed) or reject with a reason; the Expenses page shows how many are waiting.
+- **Customer location** card on the job page: paste the location the customer sent on WhatsApp / Google Maps, or "Ask customer" to send a share-location link (SMS / WhatsApp / copy). Public page `/share-location/:token` for the customer.
+- **Voice notes** recorded by technicians play on the job page.
+- UPI reference marked optional when recording payments and walk-in bills.
 - **Searchable dropdown** (`Combobox`) for product model, dealer and action taken; new jobs can add a product the customer owns that isn't on their record yet.
 
 ### Changed
