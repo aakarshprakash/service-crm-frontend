@@ -7,7 +7,7 @@ import { label, money, toMajor, toMinor } from '@/lib/format';
 import { Badge, Button, Card, Checkbox, DataTable, Field, Input, Modal, PageHeader, QueryState, Select } from '@/components/ui';
 
 interface Plan { id: number; name: string; code: string; price: number; billing_cycle: string; max_users: number; max_technicians: number; features: Record<string, boolean> | null; is_active: boolean; tenants_count: number }
-const FEATURES = ['customer_portal', 'sms', 'whatsapp', 'online_payments', 'advanced_reports'];
+const FEATURES = ['customer_portal', 'sms', 'whatsapp', 'online_payments', 'advanced_reports', 'manager_app'];
 
 export default function PlansPage() {
   const q = useQuery({ queryKey: ['admin-plans'], queryFn: () => api.get<Envelope<Plan[]>>('/admin/plans').then((r) => r.data) });
