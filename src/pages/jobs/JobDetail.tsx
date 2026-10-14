@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarClock, CornerDownRight, Phone, Repeat2, UserCog, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CornerDownRight, Pencil, Phone, Repeat2, UserCog, XCircle } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { fieldError, useApiMutation, useStaffOptions } from '@/lib/hooks';
+import { fieldError, useApiMutation, useLookups, useStaffOptions } from '@/lib/hooks';
 import { date, dateTime, duration, fromLocalInput, label, money, qty, toLocalInput } from '@/lib/format';
-import type { Job } from '@/lib/types';
+import type { Customer, CustomerProduct, Job } from '@/lib/types';
 import { Badge, Button, Card, ConfirmDialog, DefinitionList, Field, Input, Modal, PageHeader, QueryState, Select, Textarea } from '@/components/ui';
 import { MethodLabel, PriorityBadge, Section, StatusBadge, Stars } from '@/components/domain';
 import { CustomerLocationCard } from '@/components/CustomerLocation';
@@ -16,7 +16,7 @@ export default function JobDetail() {
   const { id } = useParams();
   const { can } = useAuth();
   const q = useQuery({ queryKey: ['job', id], queryFn: () => api.get<Envelope<Job>>(`/jobs/${id}`).then((r) => r.data) });
-  const [dialog, setDialog] = useState<'assign' | 'reschedule' | 'cancel' | 'followup' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'assign' | 'reschedule' | 'cancel' | 'followup' | null>(null);
   const job = q.data;
   const manage = can('jobs.manage') && job && !['completed', 'cancelled'].includes(job.status);
   const lastVisit = job?.visits?.[job.visits.length - 1];
@@ -42,6 +42,11 @@ export default function JobDetail() {
               <>
                 {manage && (
                   <>
+                    <Hint text="Corrects the product, complaint, priority, call type, location or branch. To change the visit time use Reschedule, and to change the technician use Assign, so the people involved are notified.">
+                      <Button variant="secondary" icon={<Pencil className="h-4 w-4" />} onClick={() => setDialog('edit')}>
+                        Edit
+                      </Button>
+                    </Hint>
                     <Hint
                       text={
                         job.technician
@@ -296,6 +301,7 @@ export default function JobDetail() {
             </div>
           </div>
 
+          {dialog === 'edit' && <EditJobDialog job={job} onClose={() => setDialog(null)} />}
           <AssignDialog job={job} open={dialog === 'assign'} onClose={() => setDialog(null)} />
           <RescheduleDialog job={job} open={dialog === 'reschedule'} onClose={() => setDialog(null)} />
           <CancelDialog job={job} open={dialog === 'cancel'} onClose={() => setDialog(null)} />
@@ -312,6 +318,141 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
       <span className="text-slate-500">{k}</span>
       <span className="tabular-nums">{v}</span>
     </div>
+  );
+}
+
+/** Corrects the job's own details. Time and technician have their own dialogs because they notify people. */
+function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
+  const { data: lookups } = useLookups();
+  const customer = useQuery({
+    queryKey: ['customer', String(job.customer_id)],
+    queryFn: () => api.get<Envelope<{ customer: Customer & { products: CustomerProduct[] } }>>(`/customers/${job.customer_id}`).then((r) => r.data),
+  });
+  const s = (v: number | null | undefined) => (v == null ? '' : String(v));
+  const [form, setForm] = useState({
+    customer_product_id: s(job.customer_product_id),
+    complaint_type_id: s(job.complaint_type_id),
+    complaint_summary_id: s(job.complaint_summary_id),
+    complaint_details: job.complaint_details ?? '',
+    priority: job.priority as string,
+    call_type: job.call_type,
+    service_location_id: s(job.service_location_id),
+    branch_id: s(job.branch_id),
+  });
+  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const summaries = lookups?.complaint_summaries.filter((c) => !form.complaint_type_id || !c.complaint_type_id || c.complaint_type_id === Number(form.complaint_type_id)) ?? [];
+  const id = (v: string) => (v ? Number(v) : null);
+  const m = useApiMutation((body: object) => api.patch(`/jobs/${job.id}`, body), { invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
+  const f = (k: string) => fieldError(m.error, k);
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit ${job.crm_call_id}`}
+      description="Use Reschedule to change the visit time and Assign to change the technician."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            loading={m.isPending}
+            onClick={() =>
+              m.mutate({
+                ...form,
+                // Portal jobs keep their call type: it can't be picked by hand.
+                call_type: form.call_type === job.call_type ? undefined : form.call_type,
+                customer_product_id: id(form.customer_product_id),
+                complaint_type_id: id(form.complaint_type_id),
+                complaint_summary_id: id(form.complaint_summary_id),
+                service_location_id: id(form.service_location_id),
+                branch_id: id(form.branch_id),
+                complaint_details: form.complaint_details || null,
+              })
+            }
+          >
+            Save changes
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Product" className="sm:col-span-2" error={f('customer_product_id')}>
+          <Select value={form.customer_product_id} onChange={(e) => set('customer_product_id', e.target.value)}>
+            <option value="">Not specified</option>
+            {customer.data?.customer.products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {[p.product?.brand?.name, p.product?.model_name].filter(Boolean).join(' ') || 'Product'}
+                {p.serial_no ? ` · SN ${p.serial_no}` : ''}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Complaint type" error={f('complaint_type_id')}>
+          <Select value={form.complaint_type_id} onChange={(e) => setForm((v) => ({ ...v, complaint_type_id: e.target.value, complaint_summary_id: '' }))}>
+            <option value="">Select…</option>
+            {lookups?.complaint_types.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Complaint summary" error={f('complaint_summary_id')}>
+          <Select value={form.complaint_summary_id} onChange={(e) => set('complaint_summary_id', e.target.value)} disabled={!summaries.length}>
+            <option value="">{summaries.length ? 'Select…' : 'None configured'}</option>
+            {summaries.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Details" className="sm:col-span-2" error={f('complaint_details')}>
+          <Textarea rows={3} value={form.complaint_details} onChange={(e) => set('complaint_details', e.target.value)} maxLength={2000} />
+        </Field>
+        <Field label="Priority" required>
+          <Select value={form.priority} onChange={(e) => set('priority', e.target.value)}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </Select>
+        </Field>
+        <Field label="Call type" required error={f('call_type')}>
+          <Select value={form.call_type} onChange={(e) => set('call_type', e.target.value)}>
+            <option value="crm_call">CRM call</option>
+            <option value="walk_in">Walk-in</option>
+            <option value="referral">Referral</option>
+            {form.call_type === 'portal' && <option value="portal">Customer portal</option>}
+          </Select>
+        </Field>
+        {(lookups?.service_locations.length ?? 0) > 0 && (
+          <Field label="Service location" error={f('service_location_id')}>
+            <Select value={form.service_location_id} onChange={(e) => set('service_location_id', e.target.value)}>
+              <option value="">Not specified</option>
+              {lookups?.service_locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {(lookups?.branches.length ?? 0) > 1 && (
+          <Field label="Branch" error={f('branch_id')}>
+            <Select value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}>
+              <option value="">Not specified</option>
+              {lookups?.branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+      </div>
+    </Modal>
   );
 }
 

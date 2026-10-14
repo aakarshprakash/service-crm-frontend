@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import QRCode from 'qrcode';
-import { ShieldCheck, ShieldOff } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { LogOut, Monitor, ShieldCheck, ShieldOff, Smartphone } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation } from '@/lib/hooks';
+import { relative } from '@/lib/format';
 import type { AuthUser } from '@/lib/types';
 import { Badge, Button, Card, Field, Input, Modal, PageHeader } from '@/components/ui';
 
@@ -76,6 +78,8 @@ export default function ProfilePage() {
           </Card>
         )}
 
+        <MyDevices />
+
         <Card title="Session">
           <p className="text-sm text-slate-600">Signed in as {user.email ?? user.phone}.</p>
           <Button className="mt-4" variant="secondary" onClick={logout}>
@@ -118,5 +122,54 @@ function DisableTwoFactor({ onDone, onClose }: { onDone: (u: AuthUser) => void; 
         <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
       </Field>
     </Modal>
+  );
+}
+
+interface MySession { id: number; app: 'web' | 'technician' | 'manager'; device: string; ip_address: string | null; last_used_at: string | null; signed_in_at: string; current: boolean }
+
+const APP_NAME = { web: 'Web app', technician: 'Technician app', manager: 'Manager app' } as const;
+
+/** Where I'm signed in, with sign-out for a lost phone or a shared computer. */
+function MyDevices() {
+  const q = useQuery({ queryKey: ['my-sessions'], queryFn: () => api.get<Envelope<MySession[]>>('/auth/sessions').then((r) => r.data) });
+  const others = useApiMutation(() => api.post('/auth/sessions/sign-out-others'), { invalidate: [['my-sessions']] });
+  const revoke = useApiMutation((id: number) => api.delete(`/auth/sessions/${id}`), { invalidate: [['my-sessions']] });
+  const list = q.data ?? [];
+  return (
+    <Card
+      title="Your devices"
+      actions={
+        list.length > 1 && (
+          <Button size="sm" variant="secondary" icon={<LogOut className="h-4 w-4" />} loading={others.isPending} onClick={() => others.mutate(undefined)}>
+            Sign out other devices
+          </Button>
+        )
+      }
+    >
+      <ul className="divide-y divide-slate-100">
+        {list.map((s) => (
+          <li key={s.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+            <div className="flex items-center gap-3">
+              {s.app === 'web' ? <Monitor className="h-4 w-4 text-slate-400" /> : <Smartphone className="h-4 w-4 text-slate-400" />}
+              <div>
+                <p className="font-medium text-slate-900">
+                  {s.device} {s.current && <Badge tone="green">This device</Badge>}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {APP_NAME[s.app]} · {s.last_used_at ? `active ${relative(s.last_used_at)}` : `signed in ${relative(s.signed_in_at)}`}
+                  {s.ip_address ? ` · IP ${s.ip_address}` : ''}
+                </p>
+              </div>
+            </div>
+            {!s.current && (
+              <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50" loading={revoke.isPending && revoke.variables === s.id} onClick={() => revoke.mutate(s.id)}>
+                Sign out
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {!q.isLoading && !list.length && <p className="text-sm text-slate-500">No active sessions.</p>}
+    </Card>
   );
 }

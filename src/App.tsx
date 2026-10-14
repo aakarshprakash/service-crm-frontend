@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { AuthProvider, homePath, useAuth } from '@/auth/AuthProvider';
 import { AppShell } from '@/components/layout/AppShell';
+import { ForcePasswordChange } from '@/components/ForcePasswordChange';
 import { Spinner, Toaster } from '@/components/ui';
 import type { Role } from '@/lib/types';
 
@@ -44,6 +45,7 @@ const MyHr = lazy(() => import('@/pages/hr/MyHr'));
 const InventoryPage = lazy(() => import('@/pages/inventory/InventoryPage'));
 const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const TeamPage = lazy(() => import('@/pages/users/TeamPage'));
+const TeamMember = lazy(() => import('@/pages/users/TeamMember'));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 
@@ -73,6 +75,7 @@ function RequireAuth({ roles, children }: { roles?: Role[]; children: ReactNode 
   const location = useLocation();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  if (user.must_change_password) return <ForcePasswordChange />;
   if (roles && !roles.includes(user.role)) return <Navigate to={homePath(user)} replace />;
   return <>{children}</>;
 }
@@ -158,6 +161,7 @@ export default function App() {
               <Route path="/assets/:id" element={<RequireAuth roles={STAFF}><AssetDetail /></RequireAuth>} />
               <Route path="/reports" element={<RequireAuth roles={STAFF}><ReportsPage /></RequireAuth>} />
               <Route path="/team" element={<RequireAuth roles={['admin', 'coordinator']}><TeamPage /></RequireAuth>} />
+              <Route path="/team/:id" element={<RequireAuth roles={['admin', 'coordinator']}><TeamMember /></RequireAuth>} />
               <Route path="/settings" element={<RequireAuth roles={['admin']}><SettingsPage /></RequireAuth>} />
 
               <Route path="/tech" element={<RequireAuth roles={['technician']}><TechHome /></RequireAuth>} />
