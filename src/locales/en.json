@@ -82,7 +82,13 @@
     "hr": { "title": "HR: attendance & leave", "text": "Everyone can punch in and out. See who’s in today, the monthly attendance register, and apply for or approve leave." },
     "geofence": { "title": "Geo-fenced punching", "text": "Set each branch’s location and radius; punches from outside are flagged or blocked (Settings → Preferences)." },
     "payroll": { "title": "Payroll", "text": "Set salaries, run monthly payroll from attendance with loss of pay, download payslips and record salaries as expenses." },
-    "mobile": { "title": "Technician mobile app", "text": "The Servon technician app (Android / iOS) works with this release: jobs, visits, UPI collection, punch, leave and payslips." }
+    "mobile": { "title": "Technician mobile app", "text": "The Servon technician app (Android / iOS) works with this release: jobs, visits, UPI collection, punch, leave and payslips." },
+    "team": { "title": "Team: logins under control", "text": "Open a team member to see every phone and browser they’re signed in on, sign them out remotely, set a temporary password or email a reset link." },
+    "staff": { "title": "One page per person", "text": "The same page shows their attendance this month, leave balances and requests, and salary details." },
+    "editJob": { "title": "Edit a job", "text": "Correct the product, complaint, priority, call type, location or branch of an open job with Edit on the job page." },
+    "punch": { "title": "Punch in before work", "text": "Technicians must be punched in to start a service; the app asks them to punch in first. Settings explains exactly where staff can punch in." },
+    "app22": { "title": "Technician app 2.2", "text": "Clearer job cards (visit time, area, warranty, call age), check and fill in details before starting, previous service history, share a job, and dark mode." },
+    "devices": { "title": "Your devices", "text": "Your profile lists where you’re signed in. Sign out a lost phone or every other device in one click." }
   },
   "auth": {
     "eyebrow": "Field service management",

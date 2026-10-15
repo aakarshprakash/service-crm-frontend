@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, ClipboardList, PackageSearch, ShieldCheck, Users, Wallet } from 'lucide-react';
-import { Logo, LogoMark } from '@/components/brand';
+import { Logo, LogoMark, PoweredBy } from '@/components/brand';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 /** Split-screen sign-in layout in the Servon brand: navy story panel + clean form. */
@@ -48,7 +48,7 @@ export function AuthLayout({ title, subtitle, children, footer, brand }: { title
               {t('auth.security')}
             </p>
             <p className="flex items-center gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5" />© {new Date().getFullYear()} Servon
+              <BarChart3 className="h-3.5 w-3.5" />© {new Date().getFullYear()} Servon · Powered by <b className="tracking-[0.14em] text-slate-300">SYSNAC</b>
             </p>
           </div>
         </div>
@@ -70,6 +70,7 @@ export function AuthLayout({ title, subtitle, children, footer, brand }: { title
             {footer && <div className="mt-6 text-center text-sm text-slate-500">{footer}</div>}
           </div>
         </div>
+        <PoweredBy className="text-center lg:hidden" />
       </div>
     </div>
   );

@@ -29,7 +29,7 @@ interface SettingsData {
     auto_assign_max_jobs: number;
     auto_assign_on_duty_only: boolean;
     attendance: { geofence: 'off' | 'flag' | 'enforce'; geofence_technicians: boolean; require_location: boolean };
-    jobs?: { require_signature: boolean };
+    jobs?: { require_signature: boolean; require_punch_in?: boolean };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -219,6 +219,12 @@ function Preferences({ data }: { data: SettingsData }) {
             checked={!!s.jobs?.require_signature}
             onChange={(v) => setS({ ...s, jobs: { ...s.jobs, require_signature: v } })}
           />
+          <Row
+            title="Punch in before starting a visit"
+            desc="Technicians must be punched in (on duty) to start a service. The app asks them to punch in first, then carries on."
+            checked={s.jobs?.require_punch_in ?? true}
+            onChange={(v) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, require_punch_in: v } })}
+          />
           <Row title="Customer portal" desc="Customers sign in with their phone + OTP to raise requests, track jobs and download invoices." checked={s.customer_portal} onChange={(v) => setS({ ...s, customer_portal: v })} disabled={!data.features.customer_portal} />
         </div>
       </Card>
@@ -308,6 +314,7 @@ function Preferences({ data }: { data: SettingsData }) {
             onChange={(v) => setS({ ...s, attendance: { ...s.attendance, require_location: v } })}
           />
         </div>
+        <PunchRules attendance={s.attendance} punchBeforeVisit={s.jobs?.require_punch_in ?? true} />
       </Card>
       <Card title="Onboarding" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
         <div className="divide-y divide-slate-100">
@@ -342,6 +349,35 @@ const MASTER_TYPES = [
 type MasterRow = Named & { is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null; pincodes?: string | null; technicians?: Named[]; technicians_count?: number;
   vpa?: string; payee_name?: string; is_default?: boolean; branch_id?: number | null; branch?: Named | null;
   annual_quota?: number; is_paid?: boolean; date?: string; lat?: number | null; lng?: number | null; geofence_radius?: number | null };
+
+/** Plain-language result of the attendance settings above, for office staff and for technicians. */
+function PunchRules({ attendance, punchBeforeVisit }: { attendance: SettingsData['settings']['attendance']; punchBeforeVisit: boolean }) {
+  const mode = attendance?.geofence ?? 'off';
+  const where = (applies: boolean) =>
+    !applies || mode === 'off'
+      ? 'from anywhere. Their location is saved with the punch so you can see it in HR → Today.'
+      : mode === 'flag'
+        ? 'from anywhere, but punches outside their branch radius are marked with an amber “outside” chip in HR → Today.'
+        : 'only within their branch radius. The app shows how far away they are and refuses the punch outside it.';
+  const location = attendance?.require_location || mode === 'enforce' ? ' Location (GPS) must be on.' : '';
+  return (
+    <div className="mt-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
+      <p className="mb-2 font-medium text-slate-900">How punching works with these settings</p>
+      <ul className="list-disc space-y-1.5 pl-5">
+        <li>
+          <b>Office staff</b> punch in {where(true)}
+          {location}
+        </li>
+        <li>
+          <b>Technicians</b> punch in {where(!!attendance?.geofence_technicians)}
+          {attendance?.geofence_technicians ? location : attendance?.require_location ? ' Location (GPS) must be on.' : ''}
+          {punchBeforeVisit ? ' They must be punched in before they can start a service.' : ''}
+        </li>
+        <li>The geofence only applies to branches that have a location and radius set in Master data → Branches.</li>
+      </ul>
+    </div>
+  );
+}
 
 function MasterData() {
   const [type, setType] = useState<(typeof MASTER_TYPES)[number]['key']>('action-taken-options');

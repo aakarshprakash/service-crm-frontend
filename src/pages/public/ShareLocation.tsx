@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, MapPin, ShieldCheck } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { Button, Card, QueryState } from '@/components/ui';
-import { LogoMark } from '@/components/brand';
+import { LogoMark, PoweredBy } from '@/components/brand';
 
 interface ShareInfo {
   company: string;
@@ -92,6 +92,7 @@ export default function ShareLocation() {
             </Card>
           )}
         </QueryState>
+        <PoweredBy className="mt-4 text-center" />
       </div>
     </div>
   );

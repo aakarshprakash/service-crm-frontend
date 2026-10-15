@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { MailPlus, UserPlus } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -13,6 +14,7 @@ import { Hint } from '@/components/tutorial';
 export default function TeamPage() {
   const { t } = useTranslation();
   const { can, user: me } = useAuth();
+  const navigate = useNavigate();
   const manage = can('users.manage');
   const list = useListQuery<StaffUser>('users', '/users');
   const [editing, setEditing] = useState<StaffUser | 'new' | null>(null);
@@ -60,7 +62,7 @@ export default function TeamPage() {
         <DataTable
           rows={list.data?.data}
           loading={list.isFetching}
-          onRowClick={manage ? (u) => setEditing(u) : undefined}
+          onRowClick={(u) => navigate(`/team/${u.id}`)}
           empty={<EmptyState title="No team members" />}
           columns={[
             {
@@ -135,7 +137,7 @@ export default function TeamPage() {
   );
 }
 
-function UserDialog({ user, onClose }: { user: StaffUser | null; onClose: () => void }) {
+export function UserDialog({ user, onClose }: { user: StaffUser | null; onClose: () => void }) {
   const { t } = useTranslation();
   const { data: lookups } = useLookups();
   const [form, setForm] = useState({ name: user?.name ?? '', email: user?.email ?? '', phone: user?.phone ?? '', role: user?.role ?? 'technician', branch_id: String(user?.branch_id ?? '') });

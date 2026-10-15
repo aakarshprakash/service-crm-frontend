@@ -29,6 +29,8 @@ export interface AuthUser {
   punch_status: 'in' | 'out';
   punched_at: string | null;
   two_factor_enabled: boolean;
+  /** Signed in with a temporary password set by an admin: must choose their own first. */
+  must_change_password?: boolean;
   abilities: string[];
   impersonating: boolean;
   tenant: TenantInfo | null;

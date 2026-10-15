@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BadgeIndianRupee, CalendarCheck, Landmark, Languages, MapPinned, QrCode, Smartphone } from 'lucide-react';
+import { Fingerprint, MonitorSmartphone, Pencil, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
 import { Button, Modal } from '@/components/ui';
 
 export const APP_VERSION = __APP_VERSION__;
@@ -8,13 +8,12 @@ export const APP_VERSION = __APP_VERSION__;
 const SEEN_KEY = 'servon.whatsNew.seen';
 
 const ITEMS = [
-  { icon: Languages, key: 'languages' },
-  { icon: Landmark, key: 'accounts' },
-  { icon: QrCode, key: 'upi' },
-  { icon: CalendarCheck, key: 'hr' },
-  { icon: MapPinned, key: 'geofence' },
-  { icon: BadgeIndianRupee, key: 'payroll' },
-  { icon: Smartphone, key: 'mobile' },
+  { icon: ShieldCheck, key: 'team' },
+  { icon: UserRound, key: 'staff' },
+  { icon: Pencil, key: 'editJob' },
+  { icon: Fingerprint, key: 'punch' },
+  { icon: Smartphone, key: 'app22' },
+  { icon: MonitorSmartphone, key: 'devices' },
 ] as const;
 
 /** Opens the "What's new" dialog once per version per browser. */
