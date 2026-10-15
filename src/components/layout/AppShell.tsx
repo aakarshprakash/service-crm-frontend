@@ -14,7 +14,7 @@ import { cn, getPosition } from '@/lib/utils';
 import type { NotificationItem } from '@/lib/types';
 import { Avatar, Button, SearchInput, toast } from '@/components/ui';
 import { PageGuide } from '@/components/tutorial';
-import { Logo, LogoMark } from '@/components/brand';
+import { Logo, LogoMark, PoweredBy } from '@/components/brand';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { APP_VERSION, WhatsNew, useWhatsNew } from '@/components/whatsNew';
 
@@ -286,12 +286,15 @@ function Sidebar({ sections, collapsed, onToggle, onExpand, onNews, mobile }: { 
             </button>
           )
         ) : (
-          <button type="button" onClick={onNews} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-400 hover:bg-white/[0.05] hover:text-white">
-            <Sparkles className="h-3.5 w-3.5 text-accent-400" />
-            <span>
-              Servon v{APP_VERSION} · {t('shell.whatsNew')}
-            </span>
-          </button>
+          <>
+            <button type="button" onClick={onNews} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-400 hover:bg-white/[0.05] hover:text-white">
+              <Sparkles className="h-3.5 w-3.5 text-accent-400" />
+              <span>
+                Servon v{APP_VERSION} · {t('shell.whatsNew')}
+              </span>
+            </button>
+            <PoweredBy tone="dark" className="px-3 pb-1" />
+          </>
         )}
       </div>
     </div>

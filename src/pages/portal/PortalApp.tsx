@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import type { CustomerProduct, Named } from '@/lib/types';
 import { Button, Card, EmptyState, Field, Input, QueryState, Select, Spinner, Textarea, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
+import { PoweredBy } from '@/components/brand';
 
 interface PortalJob { id: number; crm_call_id: string; status: string; complaint_type: string | null; complaint_details: string | null; product: string | null; technician: string | null; scheduled_at: string | null; created_at: string; completed_at: string | null; rated: boolean | null }
 interface PortalInvoice { id: number; invoice_number: string; total_amount: number; paid_amount: number; balance_amount: number; payment_status: string; generated_at: string; call_id?: string }
@@ -65,6 +66,7 @@ export default function PortalApp() {
           <Route path="invoices" element={<Invoices />} />
           <Route path="*" element={<Navigate to={base} replace />} />
         </Routes>
+        <PoweredBy className="mb-16 mt-10 text-center sm:mb-0" />
       </main>
       <nav className="fixed inset-x-0 bottom-0 grid grid-cols-4 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden">
         {nav.map((n) => (

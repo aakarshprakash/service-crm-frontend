@@ -6,6 +6,7 @@ import { api, API_BASE, type Envelope } from '@/lib/api';
 import { openCheckout } from '@/lib/checkout';
 import { date, money } from '@/lib/format';
 import { Button, Card, QueryState, toast } from '@/components/ui';
+import { PoweredBy } from '@/components/brand';
 import { StatusBadge } from '@/components/domain';
 import { UpiQr } from '@/components/upi';
 
@@ -108,6 +109,7 @@ export default function PayInvoice() {
             </Card>
           )}
         </QueryState>
+        <PoweredBy className="mt-4 text-center" />
       </div>
     </div>
   );

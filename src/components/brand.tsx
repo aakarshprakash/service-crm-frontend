@@ -47,3 +47,12 @@ export function Logo({ tone = 'light', tagline = false, className, size = 'md' }
     </span>
   );
 }
+
+/** "Powered by SYSNAC": the company behind Servon, on sign-in, public and portal pages and the sidebar. */
+export function PoweredBy({ tone = 'light', className }: { tone?: 'light' | 'dark'; className?: string }) {
+  return (
+    <p className={cn('text-[11px] tracking-wide', tone === 'dark' ? 'text-slate-500' : 'text-slate-400', className)} lang="en">
+      Powered by <span className={cn('font-bold tracking-[0.14em]', tone === 'dark' ? 'text-slate-300' : 'text-slate-600')}>SYSNAC</span>
+    </p>
+  );
+}
