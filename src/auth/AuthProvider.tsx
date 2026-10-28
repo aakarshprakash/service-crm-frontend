@@ -14,7 +14,8 @@ interface AuthContextValue {
   is: (...roles: Role[]) => boolean;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+/** Exported for tests / previews that render a page with a stand-in user. */
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function homePath(user: AuthUser | null): string {
   if (!user) return '/login';

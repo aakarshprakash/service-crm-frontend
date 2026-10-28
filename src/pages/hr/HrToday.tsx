@@ -6,7 +6,7 @@ import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { useLookups } from '@/lib/hooks';
 import { date, time, today } from '@/lib/format';
-import type { AttendanceDay, DayStatus } from '@/lib/types';
+import { STAFF_ROLES, type AttendanceDay, type DayStatus } from '@/lib/types';
 import { Badge, Button, Card, DataTable, EmptyState, FilterBar, Input, PageHeader, Select, StatCard } from '@/components/ui';
 import { AdjustDialog, DayPill, hours } from './hrParts';
 
@@ -45,7 +45,7 @@ export default function HrToday() {
           <Input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} className="sm:w-44" aria-label="Date" />
           <Select value={role} onChange={(e) => setRole(e.target.value)} className="sm:w-44" aria-label="Role">
             <option value="">All roles</option>
-            {['technician', 'coordinator', 'accountant', 'admin'].map((r) => (
+            {STAFF_ROLES.map((r) => (
               <option key={r} value={r}>
                 {t(`role.${r}`)}
               </option>

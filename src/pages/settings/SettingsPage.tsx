@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import {
+  Building2, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Trash2, Upload, Wallet, Wrench,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { GSTIN_PATTERN, PAN_PATTERN } from '@/lib/india';
 import { api, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
@@ -12,16 +16,23 @@ import { UpiQr, upiLink } from '@/components/upi';
 import { Badge, Button, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, QueryState, SearchInput, Select, Tabs, Textarea, Toggle, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 
-type Tab = 'company' | 'preferences' | 'master' | 'templates' | 'payments' | 'logs' | 'audit';
+type Tab = 'company' | 'invoicing' | 'preferences' | 'master' | 'templates' | 'payments' | 'email' | 'logs' | 'audit';
 
 interface SettingsData {
-  company: { name: string; slug: string; email: string | null; phone: string | null; address: string | null; gstin: string | null; timezone: string; currency: string; status: string; trial_ends_at: string | null };
+  company: {
+    name: string; slug: string; email: string | null; phone: string | null; address: string | null; state: string | null; gstin: string | null; pan: string | null;
+    timezone: string; currency: string; status: string; trial_ends_at: string | null;
+  };
+  states: string[];
+  invoice_templates: string[];
   has_logo: boolean;
   settings: {
+    gst: { service_sac: string; service_rate: number; part_rate: number };
+    invoice_template: string;
     invoice_prefix: string;
     job_prefix: string;
     receipt_prefix: string;
-    notifications: { sms: boolean; whatsapp: boolean; push: boolean };
+    notifications: { sms: boolean; whatsapp: boolean; push: boolean; email?: boolean };
     online_payments: boolean;
     strict_cash_close: boolean;
     customer_portal: boolean;
@@ -34,52 +45,141 @@ interface SettingsData {
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
   gateway: { driver: string; own_account: boolean; key_hint: string | null; platform_available: boolean; webhook_url: string };
+  email: EmailSettingsData;
   timezones: string[];
 }
+
+const SECTIONS: { group: string; items: { value: Tab; label: string; hint: string; icon: typeof Building2 }[] }[] = [
+  {
+    group: 'Business',
+    items: [
+      { value: 'company', label: 'Company', hint: 'Profile, tax IDs, logo', icon: Building2 },
+      { value: 'invoicing', label: 'Invoicing & GST', hint: 'GST rates, invoice design', icon: FileText },
+      { value: 'payments', label: 'Payments', hint: 'Online payment gateway', icon: CreditCard },
+      { value: 'email', label: 'Email', hint: 'Outgoing mail (SMTP)', icon: Mail },
+    ],
+  },
+  {
+    group: 'Operations',
+    items: [
+      { value: 'preferences', label: 'Preferences', hint: 'Jobs, cash, attendance', icon: SlidersHorizontal },
+      { value: 'master', label: 'Master data', hint: 'Brands, types, lists', icon: Database },
+      { value: 'templates', label: 'Message templates', hint: 'SMS & WhatsApp text', icon: MessageSquareText },
+    ],
+  },
+  {
+    group: 'Records',
+    items: [
+      { value: 'logs', label: 'Delivery logs', hint: 'Messages sent', icon: Send },
+      { value: 'audit', label: 'Audit log', hint: 'Who changed what', icon: History },
+    ],
+  },
+];
 
 export default function SettingsPage() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'company';
   const q = useQuery({ queryKey: ['settings'], queryFn: () => api.get<Envelope<SettingsData>>('/settings').then((r) => r.data) });
+  const current = SECTIONS.flatMap((s) => s.items).find((i) => i.value === tab);
 
   return (
     <>
-      <PageHeader title="Settings" description="Company profile, preferences and master data." />
+      <PageHeader title="Settings" description="Your company profile, invoicing, preferences and master data." />
+      {/* Phones: a scrolling tab strip. Desktop: a grouped side menu. */}
       <Tabs
-        className="mb-6"
+        className="mb-6 lg:hidden"
         value={tab}
         onChange={(v) => setParams({ tab: v })}
-        tabs={[
-          { value: 'company', label: 'Company' },
-          { value: 'preferences', label: 'Preferences' },
-          { value: 'master', label: 'Master data' },
-          { value: 'templates', label: 'Message templates' },
-          { value: 'payments', label: 'Payments' },
-          { value: 'logs', label: 'Delivery logs' },
-          { value: 'audit', label: 'Audit log' },
-        ]}
+        tabs={SECTIONS.flatMap((s) => s.items.map((i) => ({ value: i.value, label: i.label })))}
       />
-      <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
-        {q.data && (
-          <>
-            {tab === 'company' && <Company data={q.data} />}
-            {tab === 'preferences' && <Preferences data={q.data} />}
-            {tab === 'master' && <MasterData />}
-            {tab === 'templates' && <Templates />}
-            {tab === 'payments' && <Payments data={q.data} />}
-            {tab === 'logs' && <DeliveryLogs />}
-            {tab === 'audit' && <AuditLog />}
-          </>
-        )}
-      </QueryState>
+      <div className="lg:grid lg:grid-cols-[230px_1fr] lg:gap-8">
+        <nav className="hidden lg:block" aria-label="Settings sections">
+          <div className="sticky top-20 space-y-5">
+            {SECTIONS.map((s) => (
+              <div key={s.group}>
+                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{s.group}</p>
+                <ul className="space-y-0.5">
+                  {s.items.map((i) => {
+                    const Icon = i.icon;
+                    const active = i.value === tab;
+                    return (
+                      <li key={i.value}>
+                        <button
+                          type="button"
+                          onClick={() => setParams({ tab: i.value })}
+                          className={cn(
+                            'flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition',
+                            active ? 'bg-white text-brand-800 shadow-card ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white/70 hover:text-slate-900',
+                          )}
+                        >
+                          <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-brand-600' : 'text-slate-400')} />
+                          <span>
+                            <span className="block text-sm font-medium">{i.label}</span>
+                            <span className="block text-xs text-slate-400">{i.hint}</span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </nav>
+        <div className="min-w-0">
+          {current && (
+            <div className="mb-5 hidden items-center gap-3 lg:flex">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><current.icon className="h-5 w-5" /></span>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">{current.label}</h2>
+                <p className="text-sm text-slate-500">{current.hint}</p>
+              </div>
+            </div>
+          )}
+          <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
+            {q.data && (
+              <>
+                {tab === 'company' && <Company data={q.data} />}
+                {tab === 'invoicing' && <Invoicing data={q.data} />}
+                {tab === 'preferences' && <Preferences data={q.data} />}
+                {tab === 'master' && <MasterData />}
+                {tab === 'templates' && <Templates />}
+                {tab === 'payments' && <Payments data={q.data} />}
+                {tab === 'email' && <EmailSettings data={q.data.email} />}
+                {tab === 'logs' && <DeliveryLogs />}
+                {tab === 'audit' && <AuditLog />}
+              </>
+            )}
+          </QueryState>
+        </div>
+      </div>
     </>
+  );
+}
+
+/** Heading for a group of fields inside a card. */
+function FormSection({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
 function Company({ data }: { data: SettingsData }) {
   const { refresh } = useAuth();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ ...data.company, email: data.company.email ?? '', phone: data.company.phone ?? '', address: data.company.address ?? '', gstin: data.company.gstin ?? '' });
+  const initial = () => ({
+    ...data.company,
+    email: data.company.email ?? '', phone: data.company.phone ?? '', address: data.company.address ?? '',
+    gstin: data.company.gstin ?? '', pan: data.company.pan ?? '', state: data.company.state ?? '',
+  });
+  const [form, setForm] = useState(initial);
+  const dirty = JSON.stringify(form) !== JSON.stringify(initial());
+  // A GSTIN already contains the PAN (characters 3–12): offer it when the PAN is still empty.
+  const panFromGstin = GSTIN_PATTERN.test(form.gstin) ? form.gstin.slice(2, 12) : '';
   const [logoVersion, setLogoVersion] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const m = useApiMutation(() => api.put('/settings/company', form), { invalidate: [['settings']], toastValidation: false, onSuccess: () => refresh() });
@@ -110,38 +210,76 @@ function Company({ data }: { data: SettingsData }) {
   };
 
   return (
+    <>
     <div className="grid gap-6 lg:grid-cols-3">
-      <Card title="Company profile" className="lg:col-span-2" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Company name" required error={e('name')} className="sm:col-span-2">
-            <Input value={form.name} onChange={(ev) => setForm({ ...form, name: ev.target.value })} />
-          </Field>
-          <Field label="Email" error={e('email')}>
-            <Input value={form.email} onChange={(ev) => setForm({ ...form, email: ev.target.value })} />
-          </Field>
-          <Field label="Phone" error={e('phone')}>
-            <Input value={form.phone} onChange={(ev) => setForm({ ...form, phone: ev.target.value })} />
-          </Field>
-          <Field label="Address (printed on invoices)" className="sm:col-span-2" error={e('address')}>
-            <Textarea rows={3} value={form.address} onChange={(ev) => setForm({ ...form, address: ev.target.value })} />
-          </Field>
-          <Field label="GSTIN" error={e('gstin')}>
-            <Input value={form.gstin} onChange={(ev) => setForm({ ...form, gstin: ev.target.value.toUpperCase() })} maxLength={15} />
-          </Field>
-          <Field label="Currency" error={e('currency')}>
-            <Select value={form.currency} onChange={(ev) => setForm({ ...form, currency: ev.target.value })}>
-              {['INR', 'USD', 'EUR', 'GBP', 'AED'].map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Timezone" error={e('timezone')} className="sm:col-span-2">
-            <Select value={form.timezone} onChange={(ev) => setForm({ ...form, timezone: ev.target.value })}>
-              {data.timezones.map((tz) => (
-                <option key={tz}>{tz}</option>
-              ))}
-            </Select>
-          </Field>
+      <Card title="Company profile" className="lg:col-span-2">
+        <div className="space-y-6">
+          <FormSection title="Business details" hint="Shown on invoices, receipts and messages to customers.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Company name" required error={e('name')} className="sm:col-span-2">
+                <Input value={form.name} onChange={(ev) => setForm({ ...form, name: ev.target.value })} />
+              </Field>
+              <Field label="Email" error={e('email')}>
+                <Input value={form.email} onChange={(ev) => setForm({ ...form, email: ev.target.value })} />
+              </Field>
+              <Field label="Phone" error={e('phone')}>
+                <Input value={form.phone} onChange={(ev) => setForm({ ...form, phone: ev.target.value })} />
+              </Field>
+              <Field label="Address (printed on invoices)" className="sm:col-span-2" error={e('address')}>
+                <Textarea rows={3} value={form.address} onChange={(ev) => setForm({ ...form, address: ev.target.value })} />
+              </Field>
+              <Field label="State" error={e('state')} hint="Your place of business – decides CGST + SGST or IGST.">
+                <Select value={form.state} onChange={(ev) => setForm({ ...form, state: ev.target.value })}>
+                  <option value="">Select state…</option>
+                  {data.states.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          </FormSection>
+
+          <FormSection title="Tax & registration" hint="With a GSTIN, invoices are issued as GST tax invoices.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="GSTIN" error={e('gstin')} hint={form.gstin && !GSTIN_PATTERN.test(form.gstin) ? '15 characters, e.g. 32ABCDE1234F1Z5' : undefined}>
+                <Input value={form.gstin} onChange={(ev) => setForm({ ...form, gstin: ev.target.value.toUpperCase().replace(/\s/g, '') })} maxLength={15} placeholder="32ABCDE1234F1Z5" />
+              </Field>
+              <Field
+                label="PAN"
+                error={e('pan')}
+                hint={
+                  form.pan && !PAN_PATTERN.test(form.pan) ? '10 characters, e.g. ABCDE1234F' : panFromGstin && !form.pan ? (
+                    <button type="button" className="text-brand-700 hover:underline" onClick={() => setForm({ ...form, pan: panFromGstin })}>
+                      Use {panFromGstin} from the GSTIN
+                    </button>
+                  ) : 'Printed on invoices.'
+                }
+              >
+                <Input value={form.pan} onChange={(ev) => setForm({ ...form, pan: ev.target.value.toUpperCase().replace(/\s/g, '') })} maxLength={10} placeholder="ABCDE1234F" />
+              </Field>
+            </div>
+          </FormSection>
+
+          <FormSection title="Regional">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Currency" error={e('currency')}>
+                <Select value={form.currency} onChange={(ev) => setForm({ ...form, currency: ev.target.value })}>
+                  {['INR', 'USD', 'EUR', 'GBP', 'AED'].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Timezone" error={e('timezone')} className="sm:col-span-2">
+                <Select value={form.timezone} onChange={(ev) => setForm({ ...form, timezone: ev.target.value })}>
+                  {data.timezones.map((tz) => (
+                    <option key={tz}>{tz}</option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          </FormSection>
         </div>
       </Card>
       <div className="space-y-6">
@@ -175,6 +313,199 @@ function Company({ data }: { data: SettingsData }) {
         </Card>
       </div>
     </div>
+    <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => setForm(initial())} />
+    </>
+  );
+}
+
+const TEMPLATE_INFO: Record<string, { name: string; text: string; swatch: ReactNode }> = {
+  classic: {
+    name: 'Classic',
+    text: 'Formal bordered tax invoice – the layout auditors and B2B customers expect.',
+    swatch: (
+      <div className="space-y-1 rounded border-2 border-slate-800 bg-white p-2">
+        <div className="mx-auto h-1.5 w-1/2 rounded bg-slate-800" />
+        <div className="flex gap-1"><div className="h-6 flex-1 border border-slate-400" /><div className="h-6 flex-1 border border-slate-400" /></div>
+        <div className="h-1 rounded bg-slate-300" /><div className="h-1 rounded bg-slate-200" /><div className="h-1 rounded bg-slate-200" />
+      </div>
+    ),
+  },
+  modern: {
+    name: 'Modern',
+    text: 'Colour header band, card layout and a clean item table.',
+    swatch: (
+      <div className="space-y-1 overflow-hidden rounded border border-slate-200 bg-white">
+        <div className="h-4 bg-[#0f3d63]" />
+        <div className="space-y-1 p-2">
+          <div className="flex gap-1"><div className="h-5 flex-1 rounded bg-slate-100" /><div className="h-5 flex-1 rounded bg-slate-100" /></div>
+          <div className="h-1.5 rounded bg-[#0f3d63]" /><div className="h-1 rounded bg-slate-200" /><div className="h-1 rounded bg-slate-100" />
+        </div>
+      </div>
+    ),
+  },
+};
+
+/** GST rates and SAC code used on invoices, and the invoice design. */
+function Invoicing({ data }: { data: SettingsData }) {
+  const { refresh } = useAuth();
+  const [gst, setGst] = useState(data.settings.gst);
+  const [template, setTemplate] = useState(data.settings.invoice_template);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, invoice_template: template }), {
+    invalidate: [['settings']],
+    toastValidation: false,
+    onSuccess: () => refresh(),
+  });
+  const e = (n: string) => fieldError(m.error, n);
+  const registered = !!data.company.gstin;
+  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template;
+
+  const preview = async (t: string) => {
+    setPreviewing(t);
+    try {
+      window.open(await imageObjectUrl(`/settings/invoice-preview?template=${t}`), '_blank', 'noopener');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Preview not available yet – create an invoice first.');
+    } finally {
+      setPreviewing(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className={cn('flex items-start gap-3 rounded-xl border px-4 py-3 text-sm', registered ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800')}>
+        <ReceiptText className="mt-0.5 h-4 w-4 shrink-0" />
+        {registered ? (
+          <p>
+            GST registered (<span className="font-mono">{data.company.gstin}</span>
+            {data.company.state ? `, ${data.company.state}` : ''}). Invoices are issued as <strong>tax invoices</strong>; prices you enter <strong>include GST</strong>, which is shown as CGST + SGST
+            (same state) or IGST (other state).
+          </p>
+        ) : (
+          <p>No GSTIN set – invoices are issued without tax. Add your GSTIN under <strong>Company</strong> to issue GST tax invoices.</p>
+        )}
+      </div>
+
+      <Card title="GST rates">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Service SAC code" error={e('gst.service_sac')} hint="998719 = repair & maintenance of other goods.">
+            <Input value={gst.service_sac} onChange={(ev) => setGst({ ...gst, service_sac: ev.target.value.replace(/\D/g, '') })} maxLength={8} />
+          </Field>
+          <Field label="GST on service charges" error={e('gst.service_rate')}>
+            <Select value={String(gst.service_rate)} onChange={(ev) => setGst({ ...gst, service_rate: Number(ev.target.value) })}>
+              {[0, 5, 12, 18, 28].map((r) => (
+                <option key={r} value={r}>{r}%</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Default GST on parts" error={e('gst.part_rate')} hint="Items with their own HSN rate use that instead.">
+            <Select value={String(gst.part_rate)} onChange={(ev) => setGst({ ...gst, part_rate: Number(ev.target.value) })}>
+              {[0, 5, 12, 18, 28].map((r) => (
+                <option key={r} value={r}>{r}%</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <p className="mt-4 text-xs text-slate-500">Changes apply to new invoices. Invoices already issued keep the tax they were issued with.</p>
+      </Card>
+
+      <Card title="Invoice design">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {data.invoice_templates.map((t) => {
+            const info = TEMPLATE_INFO[t] ?? { name: label(t), text: '', swatch: null };
+            const active = template === t;
+            return (
+              <div
+                key={t}
+                role="radio"
+                aria-checked={active}
+                tabIndex={0}
+                onClick={() => setTemplate(t)}
+                onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && setTemplate(t)}
+                className={cn('cursor-pointer rounded-xl border-2 p-4 transition', active ? 'border-brand-600 bg-brand-50/40' : 'border-slate-200 hover:border-slate-300')}
+              >
+                <div className="flex gap-4">
+                  <div className="w-24 shrink-0">{info.swatch}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 font-semibold text-slate-900">
+                      {info.name} {active && <Badge tone="blue">Selected</Badge>}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">{info.text}</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mt-2 -ml-2"
+                      icon={<Eye className="h-3.5 w-3.5" />}
+                      loading={previewing === t}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        preview(t);
+                      }}
+                    >
+                      Preview with latest invoice
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setGst(data.settings.gst); setTemplate(data.settings.invoice_template); }} />
+    </div>
+  );
+}
+
+/**
+ * The one way to save a settings page: a bar that appears only when something has changed,
+ * so nobody has to hunt for the right Save button (or wonder whether a change was kept).
+ */
+function SaveBar({ dirty, saving, onSave, onDiscard }: { dirty: boolean; saving: boolean; onSave: () => void; onDiscard: () => void }) {
+  if (!dirty && !saving) return null;
+  return (
+    <div className="sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-lift animate-fade-in">
+      <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+        <span className="h-2 w-2 rounded-full bg-amber-500" /> You have unsaved changes
+      </p>
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={onDiscard} disabled={saving}>
+          Discard
+        </Button>
+        <Button loading={saving} onClick={onSave}>
+          Save changes
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A switch with a plain-language title and explanation. */
+function SettingRow({ title, desc, checked, onChange, disabled, note }: { title: string; desc: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; note?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-4 first:pt-0 last:pb-0">
+      <div>
+        <p className="text-sm font-medium text-slate-900">{title}</p>
+        <p className="mt-0.5 text-sm text-slate-500">{desc}</p>
+        {note && <p className="mt-1 text-xs font-medium text-amber-700">{note}</p>}
+      </div>
+      <Toggle checked={checked} onChange={onChange} disabled={disabled} label={title} />
+    </div>
+  );
+}
+
+/** A titled group of settings with an icon. */
+function SettingGroup({ icon, title, desc, children }: { icon: ReactNode; title: string; desc: string; children: ReactNode }) {
+  return (
+    <Card padded={false}>
+      <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">{icon}</span>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="text-xs text-slate-500">{desc}</p>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100 px-5 py-4">{children}</div>
+    </Card>
   );
 }
 
@@ -184,148 +515,132 @@ function Preferences({ data }: { data: SettingsData }) {
   useEffect(() => setS(data.settings), [data.settings]);
   const m = useApiMutation(() => api.put('/settings/preferences', s), { invalidate: [['settings']], toastValidation: false, onSuccess: () => refresh() });
   const e = (n: string) => fieldError(m.error, n);
-
-  const Row = ({ title, desc, checked, onChange, disabled, note }: { title: string; desc: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; note?: string }) => (
-    <div className="flex items-start justify-between gap-4 py-4">
-      <div>
-        <p className="text-sm font-medium text-slate-900">{title}</p>
-        <p className="text-sm text-slate-500">{desc}</p>
-        {note && <p className="mt-1 text-xs text-amber-700">{note}</p>}
-      </div>
-      <Toggle checked={checked} onChange={onChange} disabled={disabled} label={title} />
-    </div>
-  );
+  const dirty = JSON.stringify(s) !== JSON.stringify(data.settings);
+  const notInPlan = 'Not included in your plan.';
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card title="Payments & accounts" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
-        <div className="divide-y divide-slate-100">
-          <div className="py-4 text-sm text-slate-600">
-            <p className="font-medium text-slate-900">Offline collection by service agents</p>
-            Always on. Technicians record cash, UPI, cheque or bank transfer at the visit and hand over cash & cheques at the daily cash close.
+    <div className="mx-auto max-w-3xl space-y-5">
+      <SettingGroup icon={<Wrench className="h-4 w-4" />} title="Jobs & technicians" desc="How technicians start and finish a job, and how new jobs are handed out.">
+        <SettingRow
+          title="Technician must punch in first"
+          desc="A technician has to be on duty (punched in) before starting a job."
+          checked={s.jobs?.require_punch_in ?? true}
+          onChange={(v) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, require_punch_in: v } })}
+        />
+        <SettingRow
+          title="Customer must sign to finish a job"
+          desc="The technician takes the customer’s signature in the app before closing the visit. It is printed on the invoice."
+          checked={!!s.jobs?.require_signature}
+          onChange={(v) => setS({ ...s, jobs: { ...s.jobs, require_signature: v } })}
+        />
+        <div className="flex items-start justify-between gap-6 py-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Auto-assign: most open jobs per technician</p>
+            <p className="mt-0.5 text-sm text-slate-500">When “Auto-assign” is used, technicians who already have this many open jobs are skipped.</p>
+            {e('auto_assign_max_jobs') && <p className="mt-1 text-xs text-red-600">{e('auto_assign_max_jobs')}</p>}
           </div>
-          <Row
-            title="Online payment links"
-            desc="Let customers pay pending invoices online through the payment gateway."
-            checked={s.online_payments}
-            onChange={(v) => setS({ ...s, online_payments: v })}
-            disabled={!data.features.online_payments}
-            note={!data.features.online_payments ? 'Not included in your plan.' : undefined}
+          <Input
+            type="number"
+            min={1}
+            max={500}
+            className="w-24 shrink-0"
+            aria-label="Most open jobs per technician"
+            value={s.auto_assign_max_jobs ?? 10}
+            onChange={(ev) => setS({ ...s, auto_assign_max_jobs: Number(ev.target.value) })}
           />
-          <Row title="Strict daily cash close" desc="Technicians must close earlier days before closing today. Admins can always force-close." checked={s.strict_cash_close} onChange={(v) => setS({ ...s, strict_cash_close: v })} />
-          <Row
-            title="Require customer signature"
-            desc="Technicians must take the customer’s signature in the app before marking a visit completed. It is printed on the invoice. When off, signing is optional."
-            checked={!!s.jobs?.require_signature}
-            onChange={(v) => setS({ ...s, jobs: { ...s.jobs, require_signature: v } })}
-          />
-          <Row
-            title="Punch in before starting a visit"
-            desc="Technicians must be punched in (on duty) to start a service. The app asks them to punch in first, then carries on."
-            checked={s.jobs?.require_punch_in ?? true}
-            onChange={(v) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, require_punch_in: v } })}
-          />
-          <Row title="Customer portal" desc="Customers sign in with their phone + OTP to raise requests, track jobs and download invoices." checked={s.customer_portal} onChange={(v) => setS({ ...s, customer_portal: v })} disabled={!data.features.customer_portal} />
         </div>
-      </Card>
-      <Card title="Customer notifications">
-        <div className="divide-y divide-slate-100">
-          <Row title="SMS" desc="Job confirmation, technician assigned, completion & payment updates." checked={s.notifications.sms} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, sms: v } })} disabled={!data.features.sms} note={!data.features.sms ? 'Not included in your plan.' : undefined} />
-          <Row title="WhatsApp" desc="Same updates on WhatsApp, including invoice / payment links." checked={s.notifications.whatsapp} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, whatsapp: v } })} disabled={!data.features.whatsapp} note={!data.features.whatsapp ? 'Not included in your plan.' : undefined} />
-          <Row title="Technician push notifications" desc="New job, reassignment, reschedule and daily visit reminders." checked={s.notifications.push} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, push: v } })} />
-        </div>
-      </Card>
-      <Card title="Numbering">
+        <SettingRow
+          title="Auto-assign only to technicians on duty"
+          desc="Only pick technicians who have punched in today."
+          checked={!!s.auto_assign_on_duty_only}
+          onChange={(v) => setS({ ...s, auto_assign_on_duty_only: v })}
+        />
+      </SettingGroup>
+
+      <SettingGroup icon={<MessageSquareText className="h-4 w-4" />} title="Customers" desc="Messages customers receive and their self-service portal.">
+        <SettingRow title="SMS updates" desc="Job booked, technician on the way, job done and payment received." checked={s.notifications.sms} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, sms: v } })} disabled={!data.features.sms} note={!data.features.sms ? notInPlan : undefined} />
+        <SettingRow
+          title="Email updates"
+          desc="The same updates by email, for customers who have an email address. Sent from the account in Settings → Email."
+          checked={!!s.notifications.email}
+          onChange={(v) => setS({ ...s, notifications: { ...s.notifications, email: v } })}
+        />
+        <SettingRow title="WhatsApp updates" desc="The same updates on WhatsApp, with invoice and payment links." checked={s.notifications.whatsapp} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, whatsapp: v } })} disabled={!data.features.whatsapp} note={!data.features.whatsapp ? notInPlan : undefined} />
+        <SettingRow title="Customer portal" desc="Customers log in with their phone number to book service, track jobs and download invoices." checked={s.customer_portal} onChange={(v) => setS({ ...s, customer_portal: v })} disabled={!data.features.customer_portal} note={!data.features.customer_portal ? notInPlan : undefined} />
+        <SettingRow title="Phone alerts for technicians" desc="Technicians get a notification for new, changed and upcoming jobs." checked={s.notifications.push} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, push: v } })} />
+      </SettingGroup>
+
+      <SettingGroup icon={<Wallet className="h-4 w-4" />} title="Payments & cash" desc="Technicians always collect cash, UPI, cheque or bank transfer at the visit.">
+        <SettingRow
+          title="Online payment links"
+          desc="Customers can pay a pending invoice online from a link."
+          checked={s.online_payments}
+          onChange={(v) => setS({ ...s, online_payments: v })}
+          disabled={!data.features.online_payments}
+          note={!data.features.online_payments ? notInPlan : undefined}
+        />
+        <SettingRow title="Close cash day by day" desc="A technician must hand over earlier days’ cash before closing today. Admins can always override." checked={s.strict_cash_close} onChange={(v) => setS({ ...s, strict_cash_close: v })} />
+      </SettingGroup>
+
+      <SettingGroup icon={<Hash className="h-4 w-4" />} title="Numbering" desc="The letters at the start of job, invoice and receipt numbers.">
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Call ID prefix" error={e('job_prefix')}>
+          <Field label="Job numbers" error={e('job_prefix')} hint={`e.g. ${s.job_prefix}-2610-00042`}>
             <Input value={s.job_prefix} onChange={(ev) => setS({ ...s, job_prefix: ev.target.value.toUpperCase() })} maxLength={10} />
           </Field>
-          <Field label="Invoice prefix" error={e('invoice_prefix')}>
+          <Field label="Invoice numbers" error={e('invoice_prefix')} hint={`e.g. ${s.invoice_prefix}-2610-00042`}>
             <Input value={s.invoice_prefix} onChange={(ev) => setS({ ...s, invoice_prefix: ev.target.value.toUpperCase() })} maxLength={10} />
           </Field>
-          <Field label="Receipt prefix" error={e('receipt_prefix')}>
+          <Field label="Receipt numbers" error={e('receipt_prefix')} hint={`e.g. ${s.receipt_prefix}-2610-00042`}>
             <Input value={s.receipt_prefix} onChange={(ev) => setS({ ...s, receipt_prefix: ev.target.value.toUpperCase() })} maxLength={10} />
           </Field>
         </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Example: {s.job_prefix}-2609-00042 · {s.invoice_prefix}-2609-00042
-        </p>
-      </Card>
-      <Card title="Automatic job assignment" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
-        <p className="text-sm text-slate-500">
-          Auto-assign gives a job to the technician linked to its service location who has the fewest open jobs. Link technicians to locations in Master data → Service locations.
-        </p>
-        <div className="divide-y divide-slate-100">
-          <div className="flex items-start justify-between gap-4 py-4">
-            <div>
-              <p className="text-sm font-medium text-slate-900">Maximum open jobs per technician</p>
-              <p className="text-sm text-slate-500">Technicians with this many open jobs are skipped.</p>
-              {e('auto_assign_max_jobs') && <p className="mt-1 text-xs text-red-600">{e('auto_assign_max_jobs')}</p>}
-            </div>
-            <Input
-              type="number"
-              min={1}
-              max={500}
-              className="w-24"
-              aria-label="Maximum open jobs per technician"
-              value={s.auto_assign_max_jobs ?? 10}
-              onChange={(ev) => setS({ ...s, auto_assign_max_jobs: Number(ev.target.value) })}
-            />
+      </SettingGroup>
+
+      <SettingGroup icon={<MapPin className="h-4 w-4" />} title="Attendance" desc="Where staff are allowed to punch in. Set each branch’s location in Master data → Branches.">
+        <div className="flex items-start justify-between gap-6 py-4 first:pt-0">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Punching away from the branch</p>
+            <p className="mt-0.5 text-sm text-slate-500">Allow it, allow it but mark it, or don’t allow it.</p>
           </div>
-          <Row
-            title="Only technicians on duty"
-            desc="Only pick technicians who have punched in. When off, on-duty technicians are still preferred on a tie."
-            checked={!!s.auto_assign_on_duty_only}
-            onChange={(v) => setS({ ...s, auto_assign_on_duty_only: v })}
-          />
+          <Select
+            className="w-48 shrink-0"
+            aria-label="Punching away from the branch"
+            value={s.attendance?.geofence ?? 'off'}
+            onChange={(ev) => setS({ ...s, attendance: { ...s.attendance, geofence: ev.target.value as 'off' | 'flag' | 'enforce' } })}
+          >
+            <option value="off">Allow</option>
+            <option value="flag">Allow, but mark it</option>
+            <option value="enforce">Don’t allow</option>
+          </Select>
         </div>
-      </Card>
-      <Card title="Attendance & geofence" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
-        <p className="text-sm text-slate-500">
-          Staff punch in and out from the web or the mobile app. Set each branch’s location and radius in Master data → Branches.
-        </p>
-        <div className="divide-y divide-slate-100">
-          <div className="flex items-start justify-between gap-4 py-4">
-            <div>
-              <p className="text-sm font-medium text-slate-900">Geofence</p>
-              <p className="text-sm text-slate-500">Flag: allow punches from anywhere but mark ones outside the branch radius. Block: refuse them.</p>
-            </div>
-            <Select
-              className="w-40"
-              aria-label="Geofence mode"
-              value={s.attendance?.geofence ?? 'off'}
-              onChange={(ev) => setS({ ...s, attendance: { ...s.attendance, geofence: ev.target.value as 'off' | 'flag' | 'enforce' } })}
-            >
-              <option value="off">Off</option>
-              <option value="flag">Flag outside</option>
-              <option value="enforce">Block outside</option>
-            </Select>
-          </div>
-          <Row
-            title="Apply geofence to technicians"
-            desc="Field technicians usually start from customer sites, so they are exempt unless you turn this on."
-            checked={!!s.attendance?.geofence_technicians}
-            onChange={(v) => setS({ ...s, attendance: { ...s.attendance, geofence_technicians: v } })}
-          />
-          <Row
-            title="Require location to punch"
-            desc="Refuse punches when the phone or browser doesn’t share its location."
-            checked={!!s.attendance?.require_location}
-            onChange={(v) => setS({ ...s, attendance: { ...s.attendance, require_location: v } })}
-          />
-        </div>
-        <PunchRules attendance={s.attendance} punchBeforeVisit={s.jobs?.require_punch_in ?? true} />
-      </Card>
-      <Card title="Onboarding" actions={<Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Save</Button>}>
-        <div className="divide-y divide-slate-100">
-          <Row
-            title="Tutorial mode"
-            desc="Show everyone in your company a short guide at the top of each page, and ⓘ hints next to buttons explaining what happens when they're clicked. Turn it off once your team is comfortable."
-            checked={s.tutorial_mode}
-            onChange={(v) => setS({ ...s, tutorial_mode: v })}
-          />
-        </div>
-      </Card>
+        <SettingRow
+          title="Same rule for technicians"
+          desc="Technicians usually start from customer sites, so they are free to punch anywhere unless you turn this on."
+          checked={!!s.attendance?.geofence_technicians}
+          onChange={(v) => setS({ ...s, attendance: { ...s.attendance, geofence_technicians: v } })}
+        />
+        <SettingRow
+          title="Location must be switched on"
+          desc="Don’t accept a punch if the phone or browser doesn’t share its location."
+          checked={!!s.attendance?.require_location}
+          onChange={(v) => setS({ ...s, attendance: { ...s.attendance, require_location: v } })}
+        />
+        <details className="group py-4 last:pb-0">
+          <summary className="cursor-pointer list-none text-sm font-medium text-brand-700 hover:underline">What this means for your staff ›</summary>
+          <PunchRules attendance={s.attendance} punchBeforeVisit={s.jobs?.require_punch_in ?? true} />
+        </details>
+      </SettingGroup>
+
+      <SettingGroup icon={<GraduationCap className="h-4 w-4" />} title="Help for new users" desc="Guidance shown across the app while your team learns it.">
+        <SettingRow
+          title="Show help tips"
+          desc="A short guide at the top of each page and ⓘ hints on buttons. Turn it off once everyone is comfortable."
+          checked={s.tutorial_mode}
+          onChange={(v) => setS({ ...s, tutorial_mode: v })}
+        />
+      </SettingGroup>
+
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => setS(data.settings)} />
     </div>
   );
 }
@@ -776,6 +1091,111 @@ function Payments({ data }: { data: SettingsData }) {
               </Button>
             )}
           </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+interface EmailSettingsData {
+  own_account: boolean;
+  host: string;
+  port: number;
+  encryption: 'ssl' | 'tls' | 'none';
+  username: string;
+  from_address: string;
+  from_name: string;
+  has_password: boolean;
+  platform_available: boolean;
+  platform_from: string | null;
+}
+
+const EMAIL_PRESETS = { ssl: 465, tls: 587, none: 25 } as const;
+
+function EmailSettings({ data }: { data: EmailSettingsData }) {
+  const { user } = useAuth();
+  const [form, setForm] = useState({
+    host: data.host,
+    port: String(data.port),
+    encryption: data.encryption,
+    username: data.username,
+    password: '',
+    from_address: data.from_address,
+    from_name: data.from_name,
+  });
+  const [testTo, setTestTo] = useState(user?.email ?? '');
+  const [removing, setRemoving] = useState(false);
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  const save = useApiMutation((body: object) => api.put('/settings/email', body), {
+    invalidate: [['settings']],
+    toastValidation: false,
+    onSuccess: () => { set({ password: '' }); setRemoving(false); },
+  });
+  const test = useApiMutation((to: string) => api.post('/settings/email/test', { to }));
+  const e = (name: string) => fieldError(save.error, name);
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card title="Outgoing email (SMTP)">
+        <p className="text-sm text-slate-600">
+          {data.own_account ? (
+            <>Emails (such as staff invitations) are sent from <span className="font-mono">{data.from_address}</span> using your own mail server.</>
+          ) : data.platform_available ? (
+            <>Using the platform mail account (<span className="font-mono">{data.platform_from}</span>). Add your own SMTP account to send from your company address.</>
+          ) : (
+            'No mail server is configured, so emails cannot be delivered. Add your SMTP details below.'
+          )}
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label="SMTP host" error={e('host')} className="sm:col-span-2">
+            <Input value={form.host} onChange={(ev) => set({ host: ev.target.value })} placeholder="mail.example.com" autoComplete="off" />
+          </Field>
+          <Field label="Security" error={e('encryption')}>
+            <Select value={form.encryption} onChange={(ev) => { const enc = ev.target.value as keyof typeof EMAIL_PRESETS; set({ encryption: enc, port: String(EMAIL_PRESETS[enc]) }); }}>
+              <option value="ssl">SSL / TLS (port 465)</option>
+              <option value="tls">STARTTLS (port 587)</option>
+              <option value="none">None (port 25)</option>
+            </Select>
+          </Field>
+          <Field label="Port" error={e('port')}>
+            <Input type="number" value={form.port} onChange={(ev) => set({ port: ev.target.value })} />
+          </Field>
+          <Field label="Username" error={e('username')}>
+            <Input value={form.username} onChange={(ev) => set({ username: ev.target.value })} autoComplete="off" />
+          </Field>
+          <Field label="Password" error={e('password')} hint={data.has_password ? 'Saved. Leave blank to keep it.' : 'Stored encrypted and never shown again.'}>
+            <Input type="password" value={form.password} onChange={(ev) => set({ password: ev.target.value })} autoComplete="new-password" placeholder={data.has_password ? '••••••••' : ''} />
+          </Field>
+          <Field label="From address" error={e('from_address')}>
+            <Input type="email" value={form.from_address} onChange={(ev) => set({ from_address: ev.target.value })} placeholder="no-reply@example.com" />
+          </Field>
+          <Field label="From name" error={e('from_name')}>
+            <Input value={form.from_name} onChange={(ev) => set({ from_name: ev.target.value })} placeholder="Your company" />
+          </Field>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Button loading={save.isPending && !removing} disabled={!form.host || !form.port || !form.from_address} onClick={() => save.mutate({ ...form, port: Number(form.port) })}>
+            Save email settings
+          </Button>
+          {data.own_account && (
+            <Button variant="ghost" className="text-red-600" onClick={() => { setRemoving(true); save.mutate({ remove: true }); }}>
+              Remove my SMTP account
+            </Button>
+          )}
+        </div>
+      </Card>
+      <Card title="Send a test email">
+        <p className="text-sm text-slate-600">
+          Sends a real message using the <strong>saved</strong> settings{data.own_account ? '' : ' (or the platform account if you have none)'}, so you can confirm delivery. Save any changes first.
+        </p>
+        <div className="mt-4 space-y-3">
+          <Field label="Send to" error={fieldError(test.error, 'to')}>
+            <Input type="email" value={testTo} onChange={(ev) => setTestTo(ev.target.value)} placeholder="you@example.com" />
+          </Field>
+          <Button loading={test.isPending} disabled={!testTo} onClick={() => test.mutate(testTo)}>
+            Send test email
+          </Button>
         </div>
       </Card>
     </div>

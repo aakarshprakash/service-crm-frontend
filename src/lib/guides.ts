@@ -101,7 +101,7 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
   {
     id: 'walk-in-bill',
     pattern: '/invoices/walk-in/new',
-    title: 'Walk-in bill',
+    title: 'New invoice',
     intro: 'For customers who come to your service centre: a repair done at the counter, or parts bought over the counter.',
     points: [
       'Enter the customer’s phone and name. If the phone already belongs to a customer, the bill goes on their record instead of creating a duplicate.',
@@ -114,7 +114,7 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
     id: 'invoices',
     pattern: '/invoices',
     title: 'Invoices',
-    intro: 'Job invoices are created automatically when a technician completes a visit that has charges. Walk-in bills are made with New walk-in bill.',
+    intro: 'Job invoices are created automatically when a technician completes a visit that has charges. Counter (walk-in) invoices are made with New invoice.',
     points: [
       'Filter by status to find unpaid or partly paid invoices, or by type to see only walk-in bills.',
       'Click an invoice to record a payment, send a reminder or download the PDF.',

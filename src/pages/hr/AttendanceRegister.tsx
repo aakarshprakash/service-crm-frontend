@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, FileBarChart } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { cn } from '@/lib/utils';
-import type { AttendanceSummary, DayStatus } from '@/lib/types';
+import { STAFF_ROLES, type AttendanceSummary, type DayStatus } from '@/lib/types';
 import { Button, Card, EmptyState, FilterBar, PageHeader, QueryState, Select } from '@/components/ui';
 import { AdjustDialog, STATUS_STYLE, hours, monthName, num, thisMonth } from './hrParts';
 
@@ -54,7 +54,7 @@ export default function AttendanceRegister() {
           </div>
           <Select value={role} onChange={(e) => setRole(e.target.value)} className="sm:w-44" aria-label="Role">
             <option value="">All roles</option>
-            {['technician', 'coordinator', 'accountant', 'admin'].map((x) => (
+            {STAFF_ROLES.map((x) => (
               <option key={x} value={x}>
                 {t(`role.${x}`)}
               </option>

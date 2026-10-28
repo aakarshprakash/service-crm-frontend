@@ -114,7 +114,7 @@ export default function WalkInBill() {
             <ArrowLeft className="h-4 w-4" /> Invoices
           </Link>
         }
-        title="New walk-in bill"
+        title="New invoice"
         description="Bill a customer at the counter for a repair or parts sold. Parts are taken out of the branch’s stock."
       />
       <div className="grid gap-6 lg:grid-cols-3">

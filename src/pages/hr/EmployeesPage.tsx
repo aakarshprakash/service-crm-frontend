@@ -6,7 +6,7 @@ import { api, type Envelope } from '@/lib/api';
 import { fieldError, useApiMutation, useListQuery } from '@/lib/hooks';
 import { date, money, toMajor, toMinor } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { EmployeeProfile, LeaveBalance, Role } from '@/lib/types';
+import { STAFF_ROLES, type EmployeeProfile, type LeaveBalance, type Role } from '@/lib/types';
 import { Badge, Button, Card, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, Spinner, StatCard } from '@/components/ui';
 import { num } from './hrParts';
 
@@ -43,7 +43,7 @@ export default function EmployeesPage() {
           <SearchInput value={f.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder="Name" className="sm:w-64" />
           <Select value={f.role ?? ''} onChange={(e) => list.setFilter('role', e.target.value)} className="sm:w-44" aria-label="Role">
             <option value="">All roles</option>
-            {['technician', 'coordinator', 'accountant', 'admin'].map((r) => (
+            {STAFF_ROLES.map((r) => (
               <option key={r} value={r}>
                 {t(`role.${r}`)}
               </option>

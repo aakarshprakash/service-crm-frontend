@@ -118,12 +118,47 @@ export default function InvoiceDetail() {
                     <Tot k="Total service charge" v={inv.total_service_charge} />
                     <Tot k="Total spare charge" v={inv.total_spare_charge} />
                     {inv.discount_amount > 0 && <Tot k="Discount" v={-inv.discount_amount} />}
-                    <Tot k="Total" v={inv.total_amount} bold />
+                    {inv.is_gst && <Tot k="Taxable value" v={inv.taxable_amount ?? 0} />}
+                    {inv.is_gst && ((inv.igst_amount ?? 0) > 0
+                      ? <Tot k="IGST" v={inv.igst_amount ?? 0} />
+                      : (
+                        <>
+                          <Tot k="CGST" v={inv.cgst_amount ?? 0} />
+                          <Tot k="SGST" v={inv.sgst_amount ?? 0} />
+                        </>
+                      ))}
+                    <Tot k={inv.is_gst ? 'Total (incl. GST)' : 'Total'} v={inv.total_amount} bold />
                     <Tot k="Paid" v={inv.paid_amount} />
                     <Tot k="Balance due" v={inv.balance_amount} bold red={inv.balance_amount > 0} />
                   </tfoot>
                 </table>
               </Card>
+
+              {inv.is_gst && !!inv.gst_breakup?.summary.length && (
+                <Card title="GST breakup" actions={inv.place_of_supply && <span className="text-xs text-slate-500">Place of supply: {inv.place_of_supply}</span>} padded={false}>
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="px-5 py-2 text-left font-semibold">HSN / SAC</th>
+                        <th className="px-5 py-2 text-right font-semibold">GST %</th>
+                        <th className="px-5 py-2 text-right font-semibold">Taxable</th>
+                        {(inv.igst_amount ?? 0) > 0 ? <th className="px-5 py-2 text-right font-semibold">IGST</th> : (<><th className="px-5 py-2 text-right font-semibold">CGST</th><th className="px-5 py-2 text-right font-semibold">SGST</th></>)}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 tabular-nums">
+                      {inv.gst_breakup.summary.map((s, i) => (
+                        <tr key={i}>
+                          <td className="px-5 py-2">{s.hsn ?? '—'}</td>
+                          <td className="px-5 py-2 text-right">{s.gst_rate}%</td>
+                          <td className="px-5 py-2 text-right">{money(s.taxable)}</td>
+                          {(inv.igst_amount ?? 0) > 0 ? <td className="px-5 py-2 text-right">{money(s.igst)}</td> : (<><td className="px-5 py-2 text-right">{money(s.cgst)}</td><td className="px-5 py-2 text-right">{money(s.sgst)}</td></>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {inv.customer_gstin && <p className="border-t border-slate-100 px-5 py-2 text-xs text-slate-500">Customer GSTIN: <span className="font-medium text-slate-700">{inv.customer_gstin}</span></p>}
+                </Card>
+              )}
 
               <Card title="Payments" padded={false}>
                 <DataTable

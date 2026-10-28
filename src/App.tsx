@@ -70,14 +70,27 @@ function FullPageSpinner() {
   );
 }
 
-function RequireAuth({ roles, children }: { roles?: Role[]; children: ReactNode }) {
-  const { user, loading } = useAuth();
+const NOT_OFFICE: Role[] = ['super_admin', 'technician', 'customer'];
+
+/**
+ * Pages are opened by permission (`ability`, any of several), so every office role – including ones added later –
+ * reaches exactly the screens its permissions allow. `office` limits a page to office staff (not the technician app).
+ */
+function RequireAuth({ roles, ability, office, children }: { roles?: Role[]; ability?: string | string[]; office?: boolean; children: ReactNode }) {
+  const { user, loading, can } = useAuth();
   const location = useLocation();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   if (user.must_change_password) return <ForcePasswordChange />;
   if (roles && !roles.includes(user.role)) return <Navigate to={homePath(user)} replace />;
+  if (office && NOT_OFFICE.includes(user.role)) return <Navigate to={homePath(user)} replace />;
+  if (ability && !(Array.isArray(ability) ? ability : [ability]).some((a) => can(a))) return <Navigate to={homePath(user)} replace />;
   return <>{children}</>;
+}
+
+/** Office page guarded by a permission. */
+function Office({ ability, children }: { ability: string | string[]; children: ReactNode }) {
+  return <RequireAuth office ability={ability}>{children}</RequireAuth>;
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
@@ -93,8 +106,6 @@ function Home() {
   return <Navigate to={homePath(user)} replace />;
 }
 
-const STAFF: Role[] = ['admin', 'coordinator', 'accountant'];
-const ACCOUNTS: Role[] = ['admin', 'accountant'];
 
 /** /accounts/:id used to be a cash close; send old bookmarks to its new address. */
 function LegacyCashClose() {
@@ -123,46 +134,46 @@ export default function App() {
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
               <Route path="/profile" element={<ProfilePage />} />
 
-              <Route path="/dashboard" element={<RequireAuth roles={STAFF}><Dashboard /></RequireAuth>} />
-              <Route path="/jobs" element={<RequireAuth roles={STAFF}><JobsPage /></RequireAuth>} />
-              <Route path="/jobs/new" element={<RequireAuth roles={['admin', 'coordinator']}><JobCreate /></RequireAuth>} />
-              <Route path="/jobs/:id" element={<RequireAuth roles={STAFF}><JobDetail /></RequireAuth>} />
-              <Route path="/customers" element={<RequireAuth roles={STAFF}><CustomersPage /></RequireAuth>} />
-              <Route path="/customers/:id" element={<RequireAuth roles={STAFF}><CustomerDetail /></RequireAuth>} />
-              <Route path="/invoices" element={<RequireAuth roles={STAFF}><InvoicesPage /></RequireAuth>} />
-              <Route path="/invoices/walk-in/new" element={<RequireAuth roles={STAFF}><WalkInBill /></RequireAuth>} />
-              <Route path="/invoices/:id" element={<RequireAuth roles={[...STAFF, 'technician']}><InvoiceDetail /></RequireAuth>} />
+              <Route path="/dashboard" element={<Office ability="dashboard.view"><Dashboard /></Office>} />
+              <Route path="/jobs" element={<Office ability="jobs.view"><JobsPage /></Office>} />
+              <Route path="/jobs/new" element={<Office ability="jobs.manage"><JobCreate /></Office>} />
+              <Route path="/jobs/:id" element={<Office ability="jobs.view"><JobDetail /></Office>} />
+              <Route path="/customers" element={<Office ability="customers.view"><CustomersPage /></Office>} />
+              <Route path="/customers/:id" element={<Office ability="customers.view"><CustomerDetail /></Office>} />
+              <Route path="/invoices" element={<Office ability="invoices.view"><InvoicesPage /></Office>} />
+              <Route path="/invoices/walk-in/new" element={<Office ability="billing.walkin"><WalkInBill /></Office>} />
+              <Route path="/invoices/:id" element={<RequireAuth ability="invoices.view"><InvoiceDetail /></RequireAuth>} />
               {/* Accounts (v2.1) */}
-              <Route path="/accounts" element={<RequireAuth roles={ACCOUNTS}><AccountsOverview /></RequireAuth>} />
-              <Route path="/accounts/receivables" element={<RequireAuth roles={ACCOUNTS}><ReceivablesPage /></RequireAuth>} />
-              <Route path="/accounts/receipts" element={<RequireAuth roles={ACCOUNTS}><ReceiptsPage /></RequireAuth>} />
-              <Route path="/accounts/expenses" element={<RequireAuth roles={ACCOUNTS}><ExpensesPage /></RequireAuth>} />
-              <Route path="/accounts/expense-claims" element={<RequireAuth roles={ACCOUNTS}><ExpenseClaimsPage /></RequireAuth>} />
-              <Route path="/accounts/cash-bank" element={<RequireAuth roles={ACCOUNTS}><CashBankPage /></RequireAuth>} />
-              <Route path="/accounts/books" element={<RequireAuth roles={ACCOUNTS}><BooksPage /></RequireAuth>} />
-              <Route path="/accounts/profit-loss" element={<RequireAuth roles={ACCOUNTS}><ProfitLossPage /></RequireAuth>} />
-              <Route path="/accounts/cash-close" element={<RequireAuth roles={ACCOUNTS}><AccountsPage /></RequireAuth>} />
-              <Route path="/accounts/cash-close/:id" element={<RequireAuth roles={ACCOUNTS}><CashCloseDetail /></RequireAuth>} />
+              <Route path="/accounts" element={<Office ability="accounts.view"><AccountsOverview /></Office>} />
+              <Route path="/accounts/receivables" element={<Office ability="accounts.view"><ReceivablesPage /></Office>} />
+              <Route path="/accounts/receipts" element={<Office ability="payments.record"><ReceiptsPage /></Office>} />
+              <Route path="/accounts/expenses" element={<Office ability="expenses.manage"><ExpensesPage /></Office>} />
+              <Route path="/accounts/expense-claims" element={<Office ability="expenses.manage"><ExpenseClaimsPage /></Office>} />
+              <Route path="/accounts/cash-bank" element={<Office ability="accounts.view"><CashBankPage /></Office>} />
+              <Route path="/accounts/books" element={<Office ability="accounts.view"><BooksPage /></Office>} />
+              <Route path="/accounts/profit-loss" element={<Office ability="accounts.view"><ProfitLossPage /></Office>} />
+              <Route path="/accounts/cash-close" element={<Office ability="cash.verify"><AccountsPage /></Office>} />
+              <Route path="/accounts/cash-close/:id" element={<Office ability="cash.verify"><CashCloseDetail /></Office>} />
               {/* Pre-2.1 links */}
               <Route path="/accounts/:id" element={<LegacyCashClose />} />
               <Route path="/expenses" element={<Navigate to="/accounts/expenses" replace />} />
               <Route path="/books" element={<Navigate to="/accounts/books" replace />} />
 
               {/* HR (v2.1) */}
-              <Route path="/hr" element={<RequireAuth roles={['admin', 'coordinator']}><HrToday /></RequireAuth>} />
-              <Route path="/hr/attendance" element={<RequireAuth roles={['admin', 'coordinator']}><AttendanceRegister /></RequireAuth>} />
-              <Route path="/hr/leave" element={<RequireAuth roles={['admin', 'coordinator']}><LeaveRequests /></RequireAuth>} />
-              <Route path="/hr/employees" element={<RequireAuth roles={ACCOUNTS}><EmployeesPage /></RequireAuth>} />
-              <Route path="/hr/payroll" element={<RequireAuth roles={ACCOUNTS}><PayrollPage /></RequireAuth>} />
-              <Route path="/hr/payroll/:id" element={<RequireAuth roles={ACCOUNTS}><PayrollRunDetail /></RequireAuth>} />
-              <Route path="/me" element={<RequireAuth roles={STAFF}><MyHr /></RequireAuth>} />
-              <Route path="/inventory" element={<RequireAuth roles={STAFF}><InventoryPage /></RequireAuth>} />
-              <Route path="/assets" element={<RequireAuth roles={STAFF}><AssetsPage /></RequireAuth>} />
-              <Route path="/assets/:id" element={<RequireAuth roles={STAFF}><AssetDetail /></RequireAuth>} />
-              <Route path="/reports" element={<RequireAuth roles={STAFF}><ReportsPage /></RequireAuth>} />
-              <Route path="/team" element={<RequireAuth roles={['admin', 'coordinator']}><TeamPage /></RequireAuth>} />
-              <Route path="/team/:id" element={<RequireAuth roles={['admin', 'coordinator']}><TeamMember /></RequireAuth>} />
-              <Route path="/settings" element={<RequireAuth roles={['admin']}><SettingsPage /></RequireAuth>} />
+              <Route path="/hr" element={<Office ability="hr.view"><HrToday /></Office>} />
+              <Route path="/hr/attendance" element={<Office ability="hr.view"><AttendanceRegister /></Office>} />
+              <Route path="/hr/leave" element={<Office ability="leave.approve"><LeaveRequests /></Office>} />
+              <Route path="/hr/employees" element={<Office ability="payroll.manage"><EmployeesPage /></Office>} />
+              <Route path="/hr/payroll" element={<Office ability="payroll.manage"><PayrollPage /></Office>} />
+              <Route path="/hr/payroll/:id" element={<Office ability="payroll.manage"><PayrollRunDetail /></Office>} />
+              <Route path="/me" element={<Office ability="self.service"><MyHr /></Office>} />
+              <Route path="/inventory" element={<Office ability="inventory.view"><InventoryPage /></Office>} />
+              <Route path="/assets" element={<Office ability="assets.view"><AssetsPage /></Office>} />
+              <Route path="/assets/:id" element={<Office ability="assets.view"><AssetDetail /></Office>} />
+              <Route path="/reports" element={<Office ability="reports.view"><ReportsPage /></Office>} />
+              <Route path="/team" element={<Office ability="users.view"><TeamPage /></Office>} />
+              <Route path="/team/:id" element={<Office ability="users.view"><TeamMember /></Office>} />
+              <Route path="/settings" element={<Office ability="settings.manage"><SettingsPage /></Office>} />
 
               <Route path="/tech" element={<RequireAuth roles={['technician']}><TechHome /></RequireAuth>} />
               <Route path="/tech/jobs" element={<RequireAuth roles={['technician']}><TechJobs /></RequireAuth>} />

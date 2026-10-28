@@ -18,7 +18,7 @@ export function useLookups(enabled = true) {
 export function useStaffOptions(role?: string) {
   return useQuery({
     queryKey: ['staff-options', role ?? 'all'],
-    queryFn: () => api.get<Envelope<(Named & { role: string; branch_id: number | null; punch_status: string })[]>>('/users/options', { role }).then((r) => r.data),
+    queryFn: () => api.get<Envelope<(Named & { role: string; branch_id: number | null; punch_status: string; open_jobs?: number })[]>>('/users/options', { role }).then((r) => r.data),
     staleTime: 60_000,
   });
 }

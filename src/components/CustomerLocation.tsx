@@ -21,30 +21,26 @@ export function CustomerLocationCard({ job, canManage, visitLat, visitLng }: { j
   const hasCustomerLocation = c?.lat != null && c?.lng != null;
 
   return (
-    <Card
-      title="Customer location"
-      actions={
-        canManage && (
-          <div className="flex gap-1">
-            <Button size="sm" variant="ghost" icon={<Link2 className="h-3.5 w-3.5" />} onClick={() => setPasting(true)}>
-              Paste link
-            </Button>
-            <Button size="sm" variant="outline" icon={<Send className="h-3.5 w-3.5" />} onClick={() => setRequesting(true)}>
-              Ask customer
-            </Button>
-          </div>
-        )
-      }
-    >
+    <Card title="Customer location">
       <MapEmbed lat={hasCustomerLocation ? c!.lat : visitLat} lng={hasCustomerLocation ? c!.lng : visitLng} />
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-        <MapPin className="h-3.5 w-3.5" />
+      <p className="mt-2 flex items-start gap-1.5 text-xs text-slate-500">
+        <MapPin className="mt-px h-3.5 w-3.5 shrink-0" />
         {hasCustomerLocation
           ? `${c?.location_source ? SOURCE[c.location_source] : 'Saved on the customer'}${c?.location_updated_at ? ` · ${relative(c.location_updated_at)}` : ''}`
           : visitLat != null
             ? 'Where the last visit started (customer location not shared yet)'
             : 'Ask the customer to share their location so the technician gets directions.'}
       </p>
+      {canManage && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button size="sm" variant="outline" icon={<Send className="h-3.5 w-3.5" />} onClick={() => setRequesting(true)}>
+            Ask customer
+          </Button>
+          <Button size="sm" variant="secondary" icon={<Link2 className="h-3.5 w-3.5" />} onClick={() => setPasting(true)}>
+            Paste link
+          </Button>
+        </div>
+      )}
       {pasting && <PasteDialog job={job} onClose={() => setPasting(false)} />}
       {requesting && <RequestDialog job={job} onClose={() => setRequesting(false)} />}
     </Card>

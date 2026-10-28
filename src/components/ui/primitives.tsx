@@ -1,7 +1,8 @@
 import {
-  forwardRef, useEffect, useMemo, useRef, useState,
-  type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes,
+  Children, Fragment, forwardRef, isValidElement, useEffect, useLayoutEffect, useMemo, useRef, useState,
+  type ButtonHTMLAttributes, type ChangeEvent, type InputHTMLAttributes, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, Loader2, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -63,16 +64,56 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   return <input ref={ref} className={cn(control, 'h-10', invalid && 'border-red-400 focus:border-red-500 focus:ring-red-500/20', className)} {...props} />;
 });
 
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(function Select(
-  { className, invalid, children, ...props },
-  ref,
-) {
+/** Plain text of option children such as `{label} ({count})`. */
+function nodeText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join('');
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children);
+  return '';
+}
+
+/** Read <option> / <optgroup> children (through fragments and arrays) into combobox options. */
+function readOptions(children: ReactNode, group?: string): (ComboboxOption & { disabled?: boolean })[] {
+  const out: (ComboboxOption & { disabled?: boolean })[] = [];
+  Children.toArray(children).forEach((child) => {
+    if (!isValidElement<{ children?: ReactNode; value?: string | number; label?: string; disabled?: boolean }>(child)) return;
+    if (child.type === Fragment) out.push(...readOptions(child.props.children, group));
+    else if (child.type === 'optgroup') out.push(...readOptions(child.props.children, child.props.label));
+    else if (child.type === 'option') {
+      const label = nodeText(child.props.children);
+      out.push({ value: String(child.props.value ?? label), label, group, disabled: child.props.disabled });
+    }
+  });
+  return out;
+}
+
+/**
+ * The application's standard dropdown: written like a native <select> with <option>s, rendered as a
+ * searchable "select2" style list (search appears once there are more than a handful of options).
+ */
+export function Select({
+  className, invalid, children, value, onChange, disabled, 'aria-label': ariaLabel, id,
+}: SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }) {
+  const { t } = useTranslation();
+  const options = useMemo(() => readOptions(children).filter((o) => !o.disabled), [children]);
+  const current = value == null ? '' : String(value);
+  const blank = options.find((o) => o.value === '');
   return (
-    <select ref={ref} className={cn(control, 'h-10 pr-8', invalid && 'border-red-400', className)} {...props}>
-      {children}
-    </select>
+    <Combobox
+      id={id}
+      className={className}
+      invalid={invalid}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      value={options.some((o) => o.value === current) ? current : (blank ? '' : (options[0]?.value ?? ''))}
+      options={options}
+      placeholder={t('common.select')}
+      clearable={!!blank && current !== ''}
+      onChange={(v) => onChange?.({ target: { value: v }, currentTarget: { value: v } } as ChangeEvent<HTMLSelectElement>)}
+    />
   );
-});
+}
 
 export interface ComboboxOption {
   value: string;
@@ -100,8 +141,15 @@ export function Combobox({
   clearable = true,
   footer,
   className,
+  searchable,
+  id,
+  onCreate,
+  createLabel,
   'aria-label': ariaLabel,
 }: {
+  /** Offer "Add “typed text”" when nothing matches exactly (instant add of a master record). */
+  onCreate?: (term: string) => void;
+  createLabel?: (term: string) => string;
   value: string;
   onChange: (value: string) => void;
   options: ComboboxOption[];
@@ -113,6 +161,9 @@ export function Combobox({
   clearable?: boolean;
   footer?: ReactNode;
   className?: string;
+  /** Show the search box; by default only when the list has more than 6 options. */
+  searchable?: boolean;
+  id?: string;
   'aria-label'?: string;
 }) {
   const { t } = useTranslation();
@@ -122,10 +173,14 @@ export function Combobox({
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState('');
   const [active, setActive] = useState(0);
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const selected = options.find((o) => o.value === value);
+  const showSearch = searchable ?? (!!onCreate || options.length > 6);
 
   const filtered = useMemo(() => {
     const t = term.trim().toLowerCase();
@@ -133,9 +188,38 @@ export function Combobox({
     return options.filter((o) => `${o.label} ${o.hint ?? ''} ${o.group ?? ''}`.toLowerCase().includes(t));
   }, [options, term]);
 
+  // The list is drawn in a portal at a fixed position so modals and scrolling cards never clip it;
+  // it opens upwards when there is not enough room below.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = button.current?.getBoundingClientRect();
+      if (!r) return;
+      const below = window.innerHeight - r.bottom - 8;
+      const above = r.top - 8;
+      const up = below < 260 && above > below;
+      setPos({
+        left: r.left,
+        width: Math.max(r.width, 200),
+        ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+        maxHeight: Math.min(360, (up ? above : below) - 4),
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => root.current && !root.current.contains(e.target as Node) && setOpen(false);
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!root.current?.contains(target) && !panel.current?.contains(target)) setOpen(false);
+    };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
@@ -144,7 +228,7 @@ export function Combobox({
     if (!open) return;
     setTerm('');
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
-    const t = setTimeout(() => search.current?.focus(), 10);
+    const t = setTimeout(() => (showSearch ? search.current : list.current)?.focus(), 10);
     return () => clearTimeout(t);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -156,6 +240,7 @@ export function Combobox({
   const pick = (option: ComboboxOption) => {
     onChange(option.value);
     setOpen(false);
+    button.current?.focus();
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -176,6 +261,10 @@ export function Combobox({
       e.preventDefault();
       const option = filtered[active];
       if (option) pick(option);
+      else if (onCreate && term.trim()) {
+        onCreate(term.trim());
+        setOpen(false);
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setOpen(false);
@@ -187,6 +276,8 @@ export function Combobox({
   return (
     <div className={cn('relative', className)} ref={root} onKeyDown={onKeyDown}>
       <button
+        ref={button}
+        id={id}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
@@ -213,24 +304,30 @@ export function Combobox({
         <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform', open && 'rotate-180')} />
       </button>
 
-      {open && (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl animate-fade-in">
-          <div className="border-b border-slate-100 p-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                ref={search}
-                value={term}
-                onChange={(e) => {
-                  setTerm(e.target.value);
-                  setActive(0);
-                }}
-                placeholder={searchPlaceholder}
-                className={cn(control, 'h-9 pl-8')}
-              />
+      {open && pos && createPortal(
+        <div
+          ref={panel}
+          style={{ position: 'fixed', left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}
+          className="z-[70] flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl animate-fade-in"
+        >
+          {showSearch && (
+            <div className="border-b border-slate-100 p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  ref={search}
+                  value={term}
+                  onChange={(e) => {
+                    setTerm(e.target.value);
+                    setActive(0);
+                  }}
+                  placeholder={searchPlaceholder}
+                  className={cn(control, 'h-9 pl-8')}
+                />
+              </div>
             </div>
-          </div>
-          <ul ref={list} role="listbox" className="scroll-light max-h-60 overflow-y-auto py-1">
+          )}
+          <ul ref={list} role="listbox" tabIndex={-1} className="scroll-light min-h-0 flex-1 overflow-y-auto py-1 outline-none">
             {filtered.map((option, i) => {
               const heading = option.group && option.group !== filtered[i - 1]?.group;
               return (
@@ -255,10 +352,26 @@ export function Combobox({
                 </li>
               );
             })}
-            {!filtered.length && <li className="px-3 py-6 text-center text-sm text-slate-500">{emptyText}</li>}
+            {!filtered.length && !(onCreate && term.trim()) && <li className="px-3 py-6 text-center text-sm text-slate-500">{emptyText}</li>}
+            {onCreate && term.trim() && !options.some((o) => o.label.toLowerCase() === term.trim().toLowerCase()) && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreate(term.trim());
+                    setOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-brand-700 hover:bg-brand-50"
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded bg-brand-100 text-brand-700">+</span>
+                  {createLabel ? createLabel(term.trim()) : `Add “${term.trim()}”`}
+                </button>
+              </li>
+            )}
           </ul>
-          {footer && <div className="border-t border-slate-100 p-1.5">{footer}</div>}
-        </div>
+          {footer && <div className="border-t border-slate-100 p-1.5" onClick={() => setOpen(false)}>{footer}</div>}
+        </div>,
+        document.body,
       )}
     </div>
   );

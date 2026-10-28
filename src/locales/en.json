@@ -429,6 +429,10 @@
   },
   "role": {
     "super_admin": "Super Admin",
+    "head_engineer": "Head Engineer",
+    "hr_executive": "HR Executive",
+    "store_keeper": "Store Keeper",
+    "service_tracker": "Service Tracker",
     "admin": "Company Admin",
     "coordinator": "Coordinator",
     "accountant": "Accountant",

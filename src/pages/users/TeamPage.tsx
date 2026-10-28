@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hooks';
 import { relative } from '@/lib/format';
-import type { StaffUser } from '@/lib/types';
+import { ROLE_SUMMARY, STAFF_ROLES, type StaffUser } from '@/lib/types';
 import { Avatar, Badge, Button, Card, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
@@ -33,7 +33,7 @@ export default function TeamPage() {
         description="Office staff and field technicians. Access is controlled by role."
         actions={
           manage && (
-            <Hint text="Adds a person with a role (admin, coordinator, accounts or technician) and emails them an invitation to set their own password. Until they accept, you can resend it from the list.">
+            <Hint text="Adds a person with a role (admin, coordinator, accountant, head engineer, HR executive, store keeper, service tracker or technician) and emails them an invitation to set their own password. Until they accept, you can resend it from the list.">
               <Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setEditing('new')}>
                 Add team member
               </Button>
@@ -46,7 +46,7 @@ export default function TeamPage() {
           <SearchInput value={f.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder="Name, email or phone" className="sm:w-64" />
           <Select value={f.role ?? ''} onChange={(e) => list.setFilter('role', e.target.value)} className="sm:w-44" aria-label="Role">
             <option value="">All roles</option>
-            {['admin', 'coordinator', 'accountant', 'technician'].map((r) => (
+            {STAFF_ROLES.map((r) => (
               <option key={r} value={r}>
                 {t(`role.${r}`)}
               </option>
@@ -184,9 +184,9 @@ export function UserDialog({ user, onClose }: { user: StaffUser | null; onClose:
         <Field label="Mobile" error={e('phone')} hint="Technicians can sign in to the app with this number.">
           <Input value={form.phone} onChange={(ev) => setForm({ ...form, phone: ev.target.value })} inputMode="tel" />
         </Field>
-        <Field label="Role" required error={e('role')}>
+        <Field label="Role" required error={e('role')} hint={ROLE_SUMMARY[form.role]}>
           <Select value={form.role} onChange={(ev) => setForm({ ...form, role: ev.target.value as StaffUser['role'] })}>
-            {['technician', 'coordinator', 'accountant', 'admin'].map((r) => (
+            {STAFF_ROLES.map((r) => (
               <option key={r} value={r}>
                 {t(`role.${r}`)}
               </option>

@@ -25,7 +25,7 @@ export default function InvoicesPage() {
           can('billing.walkin') && (
             <Hint text="Bills a customer who came to your service centre: a repair done at the counter or parts sold over the counter. Parts are taken out of stock.">
               <Button icon={<Store className="h-4 w-4" />} onClick={() => navigate('/invoices/walk-in/new')}>
-                New walk-in bill
+                New invoice
               </Button>
             </Hint>
           )

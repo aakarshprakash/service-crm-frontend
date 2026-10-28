@@ -1,7 +1,12 @@
 import { clsx, type ClassValue } from 'clsx';
+import { extendTailwindMerge } from 'tailwind-merge';
 
+// Knows our custom shadows, so `shadow-card` and `shadow-lift` override each other like built-in sizes.
+const merge = extendTailwindMerge({ extend: { classGroups: { shadow: [{ shadow: ['card', 'lift'] }] } } });
+
+/** Join class names; when two Tailwind classes conflict (e.g. `h-8` then `h-20`) the later one wins. */
 export function cn(...inputs: ClassValue[]) {
-  return clsx(inputs);
+  return merge(clsx(inputs));
 }
 
 /** Only allow in-app relative redirects (prevents open redirects via ?next=). */

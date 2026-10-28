@@ -423,6 +423,10 @@
   },
   "role": {
     "super_admin": "സൂപ്പർ അഡ്മിൻ",
+    "head_engineer": "ഹെഡ് എഞ്ചിനീയർ",
+    "hr_executive": "എച്ച്ആർ എക്സിക്യൂട്ടീവ്",
+    "store_keeper": "സ്റ്റോർ കീപ്പർ",
+    "service_tracker": "സർവീസ് ട്രാക്കർ",
     "admin": "കമ്പനി അഡ്മിൻ",
     "coordinator": "കോഓർഡിനേറ്റർ",
     "accountant": "അക്കൗണ്ടന്റ്",

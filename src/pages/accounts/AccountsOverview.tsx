@@ -11,8 +11,8 @@ import { Button, Card, PageHeader, QueryState, StatCard } from '@/components/ui'
 import { MethodLabel } from '@/components/domain';
 
 interface Overview {
-  month: { income: number; expense: number; net: number; income_by_source: { job: number; walk_in: number }; expense_by_category: Record<string, number> };
-  last_month: { income: number; expense: number; net: number };
+  month: { income: number; gst: number; expense: number; net: number; income_by_source: { job: number; walk_in: number }; expense_by_category: Record<string, number> };
+  last_month: { income: number; gst: number; expense: number; net: number };
   balances: { cash: number; bank: number; with_technicians: number };
   receivables: { total: number; customers: number; buckets: { d0_30: number; d31_60: number; d61_90: number; d90_plus: number } };
   pending_cash_closes: number;
@@ -51,7 +51,7 @@ export default function AccountsOverview() {
             )}
             {can('billing.walkin') && (
               <Button icon={<Store className="h-4 w-4" />} onClick={() => navigate('/invoices/walk-in/new')}>
-                Walk-in bill
+                New invoice
               </Button>
             )}
           </>
@@ -69,10 +69,36 @@ export default function AccountsOverview() {
               </div>
             )}
 
+            {/* Every accounts screen, one click away */}
+            <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Accounts sections">
+              {[
+                ['Receivables', '/accounts/receivables', can('accounts.view')],
+                ['Receipts', '/accounts/receipts', can('payments.record')],
+                ['Expenses', '/accounts/expenses', can('expenses.manage')],
+                ['Expense claims', '/accounts/expense-claims', can('expenses.manage')],
+                ['Cash & bank', '/accounts/cash-bank', can('accounts.view')],
+                ['Day book', '/accounts/books', can('accounts.view')],
+                ['Profit & loss', '/accounts/profit-loss', can('accounts.view')],
+                ['Cash close', '/accounts/cash-close', can('cash.verify')],
+              ]
+                .filter(([, , show]) => show)
+                .map(([text, to]) => (
+                  <Link key={to as string} to={to as string} className="shrink-0 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-700">
+                    {text as string}
+                  </Link>
+                ))}
+            </nav>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Income this month" value={money(d.month.income)} hint={change(d.month.income, d.last_month.income)} tone="blue" icon={<ArrowDownLeft className="h-5 w-5" />} />
+              <StatCard label="Received this month" value={money(d.month.income)} hint={change(d.month.income, d.last_month.income)} tone="blue" icon={<ArrowDownLeft className="h-5 w-5" />} />
               <StatCard label="Expenses this month" value={money(d.month.expense)} hint={change(d.month.expense, d.last_month.expense)} tone="amber" icon={<ArrowUpRight className="h-5 w-5" />} onClick={() => navigate('/accounts/expenses')} />
-              <StatCard label={d.month.net >= 0 ? 'Profit this month' : 'Loss this month'} value={money(d.month.net)} hint={`Last month ${money(d.last_month.net)}`} tone={d.month.net >= 0 ? 'green' : 'red'} onClick={() => navigate('/accounts/profit-loss')} />
+              <StatCard
+                label={d.month.net >= 0 ? 'Profit this month' : 'Loss this month'}
+                value={money(d.month.net)}
+                hint={d.month.gst ? `After GST of ${money(d.month.gst)} · last month ${money(d.last_month.net)}` : `Last month ${money(d.last_month.net)}`}
+                tone={d.month.net >= 0 ? 'green' : 'red'}
+                onClick={() => navigate('/accounts/profit-loss')}
+              />
               <StatCard label="Receivable from customers" value={money(d.receivables.total)} hint={`${d.receivables.customers} customer${d.receivables.customers === 1 ? '' : 's'}`} tone={d.receivables.total ? 'red' : 'slate'} icon={<Users className="h-5 w-5" />} onClick={() => navigate('/accounts/receivables')} />
             </div>
 

@@ -29,6 +29,12 @@ export function money(minor: number | null | undefined, cur = currency): string 
 }
 
 /** Compact money for charts / KPI tiles, e.g. ₹1.2L */
+/** Whole currency units (₹4,86,500) – for dashboards and headline figures where paise are noise. */
+export function moneyWhole(minor: number | null | undefined, cur = currency): string {
+  if (minor === null || minor === undefined) return '–';
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(Math.round(minor / 100));
+}
+
 export function moneyShort(minor: number, cur = currency): string {
   return new Intl.NumberFormat(locale, { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 1 }).format(minor / 100);
 }

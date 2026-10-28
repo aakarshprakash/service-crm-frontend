@@ -129,11 +129,16 @@ function ItemDialog({ item, onClose }: { item: InventoryItem | null; onClose: ()
     unit_of_measure: item?.unit_of_measure ?? 'nos',
     unit_price: toMajor(item?.unit_price),
     reorder_level: item ? String(item.reorder_level) : '',
+    hsn_code: item?.hsn_code ?? '',
+    gst_rate: item?.gst_rate != null ? String(Number(item.gst_rate)) : '',
     is_active: item?.is_active ?? true,
   });
   const m = useApiMutation(
     () => {
-      const body = { ...form, unit_price: toMinor(form.unit_price), reorder_level: form.reorder_level || 0, category: form.category || null };
+      const body = {
+        ...form, unit_price: toMinor(form.unit_price), reorder_level: form.reorder_level || 0, category: form.category || null,
+        hsn_code: form.hsn_code || null, gst_rate: form.gst_rate === '' ? null : Number(form.gst_rate),
+      };
       return item ? api.patch(`/inventory/items/${item.id}`, body) : api.post('/inventory/items', body);
     },
     { invalidate: [['inventory-items'], ['inv-categories']], toastValidation: false, onSuccess: onClose },
@@ -182,8 +187,19 @@ function ItemDialog({ item, onClose }: { item: InventoryItem | null; onClose: ()
           <Input list="inv-cats" value={form.category} onChange={(ev) => setForm({ ...form, category: ev.target.value })} placeholder="e.g. AC Parts" />
           <datalist id="inv-cats">{cats.data?.map((c) => <option key={c} value={c} />)}</datalist>
         </Field>
-        <Field label="Selling price per unit" required error={e('unit_price')}>
+        <Field label="Selling price per unit" required error={e('unit_price')} hint="Including GST.">
           <Input inputMode="decimal" value={form.unit_price} onChange={(ev) => setForm({ ...form, unit_price: ev.target.value.replace(/[^\d.]/g, '') })} />
+        </Field>
+        <Field label="HSN code" error={e('hsn_code')} hint="Printed on GST invoices (4–8 digits).">
+          <Input inputMode="numeric" value={form.hsn_code} onChange={(ev) => setForm({ ...form, hsn_code: ev.target.value.replace(/\D/g, '') })} maxLength={8} placeholder="e.g. 8415" />
+        </Field>
+        <Field label="GST rate" error={e('gst_rate')}>
+          <Select value={form.gst_rate} onChange={(ev) => setForm({ ...form, gst_rate: ev.target.value })}>
+            <option value="">Company default for parts</option>
+            {[0, 5, 12, 18, 28].map((r) => (
+              <option key={r} value={String(r)}>{r}%</option>
+            ))}
+          </Select>
         </Field>
         <Field label="Reorder level" error={e('reorder_level')} hint="Alert when branch stock falls to this level.">
           <Input inputMode="decimal" value={form.reorder_level} onChange={(ev) => setForm({ ...form, reorder_level: ev.target.value.replace(/[^\d.]/g, '') })} />

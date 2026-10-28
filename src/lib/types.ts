@@ -1,4 +1,21 @@
-export type Role = 'super_admin' | 'admin' | 'coordinator' | 'accountant' | 'technician' | 'customer';
+export type Role =
+  | 'super_admin' | 'admin' | 'coordinator' | 'accountant' | 'head_engineer' | 'hr_executive' | 'store_keeper' | 'service_tracker'
+  | 'technician' | 'customer';
+
+/** Roles a company admin can give staff, in the order they are offered. */
+export const STAFF_ROLES: Role[] = ['technician', 'head_engineer', 'coordinator', 'service_tracker', 'accountant', 'store_keeper', 'hr_executive', 'admin'];
+
+/** What each staff role can do, shown when choosing a role. */
+export const ROLE_SUMMARY: Record<string, string> = {
+  admin: 'Everything in the company, including settings and users.',
+  coordinator: 'Customers, jobs and assignment, team, attendance and leave.',
+  accountant: 'Accounts, cash close, payments, expenses, stock and payroll.',
+  head_engineer: 'Supervises technicians: all jobs and assignment, team, attendance and leave, stock view.',
+  hr_executive: 'Employees, attendance corrections, leave approval and payroll.',
+  store_keeper: 'Stock and assets: items, stock in/out, issuing parts.',
+  service_tracker: 'Call centre: customers and jobs, follow-ups and reports.',
+  technician: 'Technician app: own jobs, visits, punch, cash and parts.',
+};
 export type JobStatus = 'open' | 'in_progress' | 'pending' | 'completed' | 'cancelled';
 export type Priority = 'low' | 'medium' | 'high';
 export type PaymentMethod = 'cash' | 'upi' | 'cheque' | 'bank_transfer' | 'credit' | 'online';
@@ -48,6 +65,7 @@ export interface Customer {
   phone: string;
   alt_phone: string | null;
   email: string | null;
+  gstin?: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -67,6 +85,9 @@ export interface CustomerProduct {
   id: number;
   customer_id: number;
   product_id: number | null;
+  /** The unit's brand / product type – set even when the exact model isn't known yet. */
+  brand_id?: number | null;
+  category_id?: number | null;
   serial_no: string | null;
   outdoor_serial_no: string | null;
   purchase_date: string | null;
@@ -75,7 +96,17 @@ export interface CustomerProduct {
   dealer_id: number | null;
   under_warranty?: boolean;
   product?: { id: number; model_name: string; brand?: Named | null; category?: Named | null } | null;
+  brand?: Named | null;
+  category?: Named | null;
   dealer?: Named | null;
+}
+
+/** "LLOYD 1.5T INV-18", or "LLOYD · INVERTER AC (model not set)" while only the brand is known. */
+export function unitLabel(p?: CustomerProduct | null): string {
+  if (!p) return '';
+  const brand = p.product?.brand?.name ?? p.brand?.name;
+  if (p.product) return [brand, p.product.model_name].filter(Boolean).join(' ');
+  return [brand, p.category?.name].filter(Boolean).join(' · ') || 'Product';
 }
 
 export interface Visit {
@@ -181,6 +212,33 @@ export interface InvoiceItem {
   item?: { id: number; code: string; name: string; unit_of_measure: string } | null;
 }
 
+export interface GstLine {
+  type: string;
+  description: string;
+  hsn: string | null;
+  qty: number;
+  gross: number;
+  discount: number;
+  net: number;
+  gst_rate: number;
+  unit_taxable: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  tax: number;
+}
+
+export interface GstSummaryRow {
+  hsn: string | null;
+  gst_rate: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  tax: number;
+}
+
 export interface Invoice {
   id: number;
   job_id: number | null;
@@ -197,6 +255,15 @@ export interface Invoice {
   is_credit: boolean;
   notes: string | null;
   generated_at: string;
+  /** GST tax invoice (prices are GST-inclusive: taxable + taxes = total). */
+  is_gst?: boolean;
+  taxable_amount?: number;
+  cgst_amount?: number;
+  sgst_amount?: number;
+  igst_amount?: number;
+  place_of_supply?: string | null;
+  customer_gstin?: string | null;
+  gst_breakup?: { lines: GstLine[]; summary: GstSummaryRow[] } | null;
   customer?: Customer;
   creator?: Named | null;
   items?: InvoiceItem[];
@@ -217,6 +284,8 @@ export interface Job {
   complaint_type_id: number | null;
   complaint_summary_id: number | null;
   complaint_details: string | null;
+  /** Formatted details (sanitised HTML) when entered with the editor. */
+  complaint_details_html?: string | null;
   priority: Priority;
   call_type: string;
   status: JobStatus;
@@ -267,6 +336,8 @@ export interface InventoryItem {
   name: string;
   type: 'spare' | 'consumable';
   category: string | null;
+  hsn_code?: string | null;
+  gst_rate?: number | string | null;
   unit_of_measure: string;
   unit_price: number;
   reorder_level: number;

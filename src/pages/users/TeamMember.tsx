@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Copy, KeyRound, LogOut, Mail, Monitor, Pencil, ShieldCheck, Smartphone, Tablet } from 'lucide-react';
+import { ArrowLeft, Building2, Copy, KeyRound, LogOut, Mail, MessageCircle, Monitor, Pencil, Phone, ShieldCheck, Smartphone, Tablet } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApiMutation } from '@/lib/hooks';
 import { date, dateTime, money, relative } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { AttendanceDay, EmployeeProfile, LeaveBalance, LeaveRequest, StaffUser } from '@/lib/types';
-import { Avatar, Badge, Button, Card, ConfirmDialog, DataTable, DefinitionList, EmptyState, Modal, PageHeader, QueryState, StatCard, Tabs, toast } from '@/components/ui';
+import { ROLE_SUMMARY, type AttendanceDay, type EmployeeProfile, type LeaveBalance, type LeaveRequest, type StaffUser } from '@/lib/types';
+import { Avatar, Badge, Button, Card, ConfirmDialog, DataTable, DefinitionList, EmptyState, Modal, QueryState, StatCard, Tabs, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
 import { hours, monthName, num, STATUS_STYLE, thisMonth } from '@/pages/hr/hrParts';
@@ -45,7 +45,7 @@ export default function TeamMember() {
   const { can, user: me } = useAuth();
   const [tab, setTab] = useState<Tab>('overview');
   const [editing, setEditing] = useState(false);
-  const q = useQuery({ queryKey: ['users', id], queryFn: () => api.get<Envelope<StaffUser>>(`/users/${id}`).then((r) => r.data) });
+  const q = useQuery({ queryKey: ['users', id], queryFn: () => api.get<Envelope<StaffUser & { stats?: MemberStats | null }>>(`/users/${id}`).then((r) => r.data) });
   const u = q.data;
   const tabs: { value: Tab; label: string }[] = [
     { value: 'overview', label: 'Overview' },
@@ -59,33 +59,57 @@ export default function TeamMember() {
     <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
       {u && (
         <>
-          <PageHeader
-            back={
-              <Link to="/team" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-                <ArrowLeft className="h-4 w-4" /> Team
-              </Link>
-            }
-            title={
-              <span className="flex flex-wrap items-center gap-3">
-                <Avatar name={u.name} className="h-10 w-10" /> {u.name} <StatusBadge status={u.status} />
-                {u.role === 'technician' && (
-                  <Badge tone={u.punch_status === 'in' ? 'green' : 'slate'} dot>
-                    {u.punch_status === 'in' ? 'On duty' : 'Off duty'}
-                  </Badge>
+          <Link to="/team" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+            <ArrowLeft className="h-4 w-4" /> Team
+          </Link>
+          {/* Profile header */}
+          <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+            <div className="h-24 bg-gradient-to-r from-navy-900 via-brand-700 to-brand-500" />
+            <div className="flex flex-col gap-4 px-6 pb-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-4">
+                <Avatar name={u.name} className="-mt-10 h-20 w-20 shrink-0 border-4 border-white text-2xl shadow-md" />
+                <div className="min-w-0 pt-3">
+                  <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold text-slate-900">
+                    {u.name} {u.id === me?.id && <Badge tone="violet">You</Badge>}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                    <Badge tone={u.role === 'admin' ? 'violet' : u.role === 'technician' ? 'blue' : 'sky'}>{t(`role.${u.role}`)}</Badge>
+                    <StatusBadge status={u.status} />
+                    {u.role === 'technician' && (
+                      <Badge tone={u.punch_status === 'in' ? 'green' : 'slate'} dot>
+                        {u.punch_status === 'in' ? 'On duty' : 'Off duty'}
+                      </Badge>
+                    )}
+                    {u.branch && <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {u.branch.name}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:pt-3">
+                {u.phone && (
+                  <a href={`tel:${u.phone}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                    <Phone className="h-4 w-4" /> Call
+                  </a>
                 )}
-              </span>
-            }
-            description={`${t(`role.${u.role}`)}${u.branch ? ` · ${u.branch.name}` : ''}${u.id === me?.id ? ' · you' : ''}`}
-            actions={
-              can('users.manage') && (
-                <Button variant="secondary" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(true)}>
-                  Edit
-                </Button>
-              )
-            }
-          />
+                {u.phone && (
+                  <a href={`https://wa.me/${u.phone.replace(/\D/g, '').replace(/^(\d{10})$/, '91$1')}`} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                    <MessageCircle className="h-4 w-4" /> WhatsApp
+                  </a>
+                )}
+                {u.email && !u.email.endsWith('.local') && (
+                  <a href={`mailto:${u.email}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                    <Mail className="h-4 w-4" /> Email
+                  </a>
+                )}
+                {can('users.manage') && (
+                  <Button size="sm" className="h-9" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(true)}>
+                    Edit
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
           <Tabs tabs={tabs} value={tab} onChange={setTab} className="mb-6" />
-          {tab === 'overview' && <Overview u={u} />}
+          {tab === 'overview' && <Overview u={u} stats={u.stats ?? null} />}
           {tab === 'access' && <AccessTab u={u} self={u.id === me?.id} />}
           {tab === 'attendance' && <AttendanceTab u={u} />}
           {tab === 'leave' && <LeaveTab u={u} />}
@@ -97,23 +121,65 @@ export default function TeamMember() {
   );
 }
 
-function Overview({ u }: { u: StaffUser }) {
+interface MemberStats {
+  open_jobs: number;
+  completed_this_month: number;
+  completed_total: number;
+  rating: number | null;
+  reviews: number;
+  recent_jobs: { id: number; crm_call_id: string; status: string; scheduled_at: string | null; created_at: string; customer?: { name: string } | null; complaint_type?: { name: string } | null }[];
+}
+
+function Overview({ u, stats }: { u: StaffUser; stats: MemberStats | null }) {
   const { t } = useTranslation();
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <Card title="Details" className="lg:col-span-2">
-        <DefinitionList
-          items={[
-            ['Email', u.email ?? '—'],
-            ['Mobile', u.phone ?? '—'],
-            ['Role', t(`role.${u.role}`)],
-            ['Branch', u.branch?.name ?? '—'],
-            ['Service locations', u.service_locations?.length ? u.service_locations.map((l) => l.name).join(', ') : u.role === 'technician' ? 'None: auto-assignment skips them' : '—'],
-            ['Last sign-in', u.last_login_at ? `${dateTime(u.last_login_at)} (${relative(u.last_login_at)})` : 'Never'],
-          ]}
-        />
-      </Card>
-      <Card title="What they can sign in to">
+    <div className="space-y-6">
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label="Open jobs" value={num(stats.open_jobs)} tone="blue" />
+          <StatCard label="Completed this month" value={num(stats.completed_this_month)} tone="green" />
+          <StatCard label="Completed in total" value={num(stats.completed_total)} tone="slate" />
+          <StatCard label="Customer rating" value={stats.rating != null ? `${stats.rating} ★` : '—'} hint={stats.reviews ? `${stats.reviews} review${stats.reviews === 1 ? '' : 's'}` : 'No reviews yet'} tone="amber" />
+        </div>
+      )}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="Details">
+            <DefinitionList
+              items={[
+                ['Email', u.email ?? '—'],
+                ['Mobile', u.phone ?? <span className="text-amber-700">Not set – needed for the mobile app sign-in</span>],
+                ['Role', t(`role.${u.role}`)],
+                ['Branch', u.branch?.name ?? '—'],
+                ['Service locations', u.service_locations?.length ? u.service_locations.map((l) => l.name).join(', ') : u.role === 'technician' ? 'None: auto-assignment skips them' : '—'],
+                ['Last sign-in', u.last_login_at ? `${dateTime(u.last_login_at)} (${relative(u.last_login_at)})` : 'Never'],
+              ]}
+            />
+          </Card>
+          {!!stats?.recent_jobs.length && (
+            <Card title="Recent jobs" padded={false} actions={<Link to={`/jobs?technician_id=${u.id}`} className="text-sm text-brand-700 hover:underline">All jobs</Link>}>
+              <ul className="divide-y divide-slate-100">
+                {stats.recent_jobs.map((j) => (
+                  <li key={j.id}>
+                    <Link to={`/jobs/${j.id}`} className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50">
+                      <div className="min-w-0 text-sm">
+                        <p className="font-medium text-slate-900">{j.crm_call_id} <span className="font-normal text-slate-500">· {j.customer?.name ?? '—'}</span></p>
+                        <p className="truncate text-xs text-slate-500">{j.complaint_type?.name ?? 'No service type'} · {j.scheduled_at ? dateTime(j.scheduled_at) : `logged ${date(j.created_at)}`}</p>
+                      </div>
+                      <StatusBadge status={j.status} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </div>
+        <div className="space-y-6">
+          <Card title="Role & access">
+            <p className="text-sm font-medium text-slate-900">{t(`role.${u.role}`)}</p>
+            <p className="mt-1 text-sm text-slate-600">{ROLE_SUMMARY[u.role] ?? '—'}</p>
+          </Card>
+          <Card title="What they can sign in to">
         <ul className="space-y-3 text-sm text-slate-700">
           <li className="flex gap-2">
             <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /> Web app{u.role === 'technician' ? ' (mobile web view)' : ''}
@@ -128,7 +194,9 @@ function Overview({ u }: { u: StaffUser }) {
             </li>
           )}
         </ul>
-      </Card>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

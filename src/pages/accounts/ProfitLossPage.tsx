@@ -14,6 +14,8 @@ interface Statement {
   income: Line[];
   expenses: Line[];
   total_income: { current: number; previous: number };
+  gst: { current: number; previous: number };
+  net_income: { current: number; previous: number };
   total_expense: { current: number; previous: number };
   net: { current: number; previous: number };
   margin: { current: number | null; previous: number | null };
@@ -70,7 +72,13 @@ export default function ProfitLossPage() {
                 {s.income.map((l) => (
                   <LineRow key={l.label} line={l} />
                 ))}
-                <TotalRow label="Total income" cur={s.total_income.current} prev={s.total_income.previous} />
+                <TotalRow label="Total received" cur={s.total_income.current} prev={s.total_income.previous} />
+                {(s.gst.current !== 0 || s.gst.previous !== 0) && (
+                  <>
+                    <LineRow line={{ label: 'Less: GST collected (payable to government)', current: -s.gst.current, previous: -s.gst.previous }} />
+                    <TotalRow label="Net income" cur={s.net_income.current} prev={s.net_income.previous} />
+                  </>
+                )}
                 <Heading>Expenses</Heading>
                 {s.expenses.length ? s.expenses.map((l) => <LineRow key={l.label} line={l} />) : <tr><td className="px-5 py-2 text-slate-500" colSpan={3}>No expenses</td></tr>}
                 <TotalRow label="Total expenses" cur={s.total_expense.current} prev={s.total_expense.previous} />
@@ -90,6 +98,7 @@ export default function ProfitLossPage() {
             </table>
             <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
               Cash basis: income counts when payment is received; unpaid invoices are under Receivables. Salaries appear once a payroll is marked paid.
+              GST inside each payment is worked out exactly from its invoice and kept out of profit.
             </p>
           </Card>
         )}
