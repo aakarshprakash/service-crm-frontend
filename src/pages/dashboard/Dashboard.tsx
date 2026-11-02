@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import {
-  AlertTriangle, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, ClipboardCheck, IndianRupee, PackageCheck, Plus, UserX, Users, Wallet,
+  AlertTriangle, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, ClipboardCheck, IndianRupee, PackageCheck, Plus, UserX, Users, Wallet, XCircle,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, type Envelope } from '@/lib/api';
@@ -30,7 +30,21 @@ interface TodayVisit {
   brand: string | null;
 }
 
+interface LocationPreview {
+  id: number | null;
+  name: string | null;
+  city: string | null;
+  active: number;
+  unassigned: number;
+  overdue: number;
+  aged: number;
+  linked_technicians: number;
+  on_duty: number;
+}
+
 interface DashboardData {
+  /** Missing for roles that don't see jobs. */
+  locations?: LocationPreview[];
   today: { visits: TodayVisit[]; completed: number; logged: number };
   jobs: {
     by_status: Record<string, number>;
@@ -108,6 +122,8 @@ export default function Dashboard() {
               <Pipeline d={d} className={can('jobs.view') ? '' : 'lg:col-span-3'} />
             </div>
 
+            {can('jobs.view') && <Locations d={d} />}
+
             <div className="grid gap-6 lg:grid-cols-3">
               <Trend d={d} className={d.revenue ? 'lg:col-span-2' : 'lg:col-span-3'} />
               {d.revenue && <Money revenue={d.revenue} />}
@@ -124,13 +140,60 @@ export default function Dashboard() {
   );
 }
 
+/** Quick look at the Service locations page: the busiest locations, one hue, numbers always shown. */
+function Locations({ d }: { d: DashboardData }) {
+  const { t } = useTranslation();
+  const busy = (d.locations ?? []).filter((l) => l.active > 0);
+  if (!d.locations?.length) return null;
+  const shown = busy.slice(0, 5);
+  const max = Math.max(1, ...shown.map((l) => l.active));
+  return (
+    <Card
+      title={t('dashboard.locations', 'Jobs by service location')}
+      actions={
+        <Link to="/service-locations" className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+          {t('dashboard.locationsDetails', 'View details')} <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      }
+    >
+      {shown.length ? (
+        <ul className="space-y-3.5">
+          {shown.map((l) => (
+            <li key={l.id ?? 'none'}>
+              <Link to={`/jobs?service_location_id=${l.id ?? 'none'}&status=open,in_progress,pending,part_pending`} className="group grid items-center gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]">
+                <span className="truncate text-sm text-slate-700 group-hover:text-brand-700">{l.name ?? t('dashboard.noLocation', 'No location set')}</span>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <span className="block h-full rounded-full bg-brand-600" style={{ width: `${Math.max(3, (l.active / max) * 100)}%` }} />
+                  </span>
+                  <span className="w-8 text-right text-sm font-semibold tabular-nums text-slate-900">{l.active}</span>
+                </span>
+                <span className="whitespace-nowrap text-xs text-slate-500 sm:w-48 sm:text-right">
+                  {[
+                    l.unassigned > 0 && t('dashboard.locationsUnassigned', '{{count}} unassigned', { count: l.unassigned }),
+                    l.overdue > 0 && t('dashboard.locationsOverdue', '{{count}} overdue', { count: l.overdue }),
+                  ].filter(Boolean).join(' · ') || t('dashboard.locationsFine', 'All assigned, none overdue')}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-500">{t('dashboard.locationsEmpty', 'No jobs in hand at any location.')}</p>
+      )}
+      {busy.length > shown.length && <p className="mt-3 text-xs text-slate-500">{t('dashboard.locationsMore', '+{{count}} more locations', { count: busy.length - shown.length })}</p>}
+    </Card>
+  );
+}
+
 /** What needs someone's action now – big, plain and clickable. */
 function Attention({ d }: { d: DashboardData }) {
   const { t } = useTranslation();
   const { can } = useAuth();
   const items = [
-    { show: d.jobs.overdue > 0, to: '/jobs?status=open,pending&sort=scheduled', icon: <CalendarClock className="h-5 w-5" />, count: d.jobs.overdue, text: t('dashboard.att.overdue', 'Visits overdue'), action: t('dashboard.att.overdueAction', 'Reschedule or attend'), tone: 'red' },
-    { show: d.jobs.unassigned > 0, to: '/jobs?technician_id=unassigned&status=open,pending', icon: <UserX className="h-5 w-5" />, count: d.jobs.unassigned, text: t('dashboard.att.unassigned', 'Jobs without a technician'), action: t('dashboard.att.unassignedAction', 'Assign a technician'), tone: 'amber' },
+    { show: (d.jobs.by_status.cancel_requested ?? 0) > 0 && can('jobs.approve_cancel'), to: '/jobs?status=cancel_requested', icon: <XCircle className="h-5 w-5" />, count: d.jobs.by_status.cancel_requested ?? 0, text: t('dashboard.att.cancel', 'Cancellations to approve'), action: t('dashboard.att.cancelAction', 'Approve or reject'), tone: 'red' as const },
+    { show: d.jobs.overdue > 0, to: '/jobs?quick=overdue&sort=scheduled', icon: <CalendarClock className="h-5 w-5" />, count: d.jobs.overdue, text: t('dashboard.att.overdue', 'Visits overdue'), action: t('dashboard.att.overdueAction', 'Reschedule or attend'), tone: 'red' },
+    { show: d.jobs.unassigned > 0, to: '/jobs?quick=unassigned', icon: <UserX className="h-5 w-5" />, count: d.jobs.unassigned, text: t('dashboard.att.unassigned', 'Jobs without a technician'), action: t('dashboard.att.unassignedAction', 'Assign a technician'), tone: 'amber' },
     { show: d.cash.pending_verification > 0 && can('cash.verify'), to: '/accounts/cash-close?status=submitted', icon: <Wallet className="h-5 w-5" />, count: d.cash.pending_verification, text: t('dashboard.att.cash', 'Cash handovers to check'), action: t('dashboard.att.cashAction', 'Verify cash close'), tone: 'amber' },
     { show: d.inventory.low_stock_count > 0, to: '/inventory?tab=stock&low_stock=1', icon: <AlertTriangle className="h-5 w-5" />, count: d.inventory.low_stock_count, text: t('dashboard.att.stock', 'Items running low'), action: t('dashboard.att.stockAction', 'Reorder stock'), tone: 'amber' },
   ].filter((i) => i.show);
@@ -292,7 +355,9 @@ function Pipeline({ d, className }: { d: DashboardData; className?: string }) {
   const stages = [
     { key: 'open', label: t('dashboard.stage.open', 'Waiting to start') },
     { key: 'in_progress', label: t('dashboard.stage.progress', 'Technician working') },
-    { key: 'pending', label: t('dashboard.stage.pending', 'Waiting for parts / revisit') },
+    { key: 'pending', label: t('dashboard.stage.revisit', 'Waiting for a revisit') },
+    { key: 'part_pending', label: t('dashboard.stage.part', 'Waiting for a part') },
+    { key: 'cancel_requested', label: t('dashboard.stage.cancel', 'Cancellation to approve') },
   ];
   const active = stages.reduce((a, x) => a + (s[x.key] ?? 0), 0);
   const max = Math.max(1, ...stages.map((x) => s[x.key] ?? 0));

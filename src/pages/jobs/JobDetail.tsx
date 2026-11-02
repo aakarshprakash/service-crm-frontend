@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, CalendarClock, Check, CheckCircle2, ClipboardList, Printer, CornerDownRight, FileText, MapPin, Package, Pencil, Phone, Repeat2, User, UserCog, Wrench, XCircle,
+  ArrowLeft, CalendarClock, Check, CheckCircle2, ClipboardList, Printer, CornerDownRight, FileText, MapPin, Package, PackageCheck, PackageSearch, Pencil, Phone, Repeat2, User, UserCog, Wrench, XCircle,
 } from 'lucide-react';
 import { api, ApiError, imageObjectUrl, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
@@ -10,11 +10,11 @@ import { fieldError, useApiMutation, useLookups, useStaffOptions } from '@/lib/h
 import { date, dateTime, duration, fromLocalInput, label, money, qty, toLocalInput } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { unitLabel, type CustomerProduct, type Job } from '@/lib/types';
-import { Avatar, Badge, Button, Card, Combobox, ConfirmDialog, Field, Input, Modal, PageHeader, QueryState, Select, Textarea, toast } from '@/components/ui';
+import { Avatar, Badge, Button, Card, Combobox, Field, Input, Modal, PageHeader, QueryState, Select, Textarea, toast } from '@/components/ui';
 import { MethodLabel, PriorityBadge, StatusBadge, Stars } from '@/components/domain';
 import { CustomerLocationCard } from '@/components/CustomerLocation';
 import { RichTextField, RichTextView } from '@/components/RichText';
-import { ProductFields, productPayload, type ProductDraft } from '@/pages/customers/CustomerForm';
+import { ModelField, ProductCategoryField, ProductFields, productPayload, unitDraft, type ProductDraft } from '@/pages/customers/CustomerForm';
 import { Hint } from '@/components/tutorial';
 
 /** Logged → Assigned → Visit → Completed, with the current stage highlighted. */
@@ -55,24 +55,26 @@ function Progress({ job }: { job: Job }) {
   );
 }
 
-/** One key fact in the strip under the header. */
-function Fact({ icon, label: k, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+/** One key fact in the overview at the top of the page. */
+function Fact({ icon, label: k, children, note }: { icon: ReactNode; label: string; children: ReactNode; note?: ReactNode }) {
   return (
-    <div className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-card">
+    <div className="flex min-w-0 items-start gap-3 px-5 py-4">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{icon}</span>
       <div className="min-w-0">
         <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{k}</p>
         <div className="truncate text-sm font-semibold text-slate-900">{children}</div>
+        {note && <div className="truncate text-xs text-slate-500">{note}</div>}
       </div>
     </div>
   );
 }
 
 function Row({ k, v, strong }: { k: string; v: ReactNode; strong?: boolean }) {
+  const empty = v === '—' || v === '–';
   return (
     <div className={cn('flex justify-between gap-3', strong && 'border-t border-slate-100 pt-2 font-semibold text-slate-900')}>
-      <span className={strong ? '' : 'text-slate-500'}>{k}</span>
-      <span className="tabular-nums">{v}</span>
+      <span className={cn('shrink-0', !strong && 'text-slate-500')}>{k}</span>
+      <span className={cn('min-w-0 break-words text-right tabular-nums', empty ? 'text-slate-400' : !strong && 'text-slate-900')}>{v}</span>
     </div>
   );
 }
@@ -100,14 +102,17 @@ export default function JobDetail() {
   const [params, setParams] = useSearchParams();
   const justCreated = params.get('created') === '1';
   const q = useQuery({ queryKey: ['job', id], queryFn: () => api.get<Envelope<Job>>(`/jobs/${id}`).then((r) => r.data) });
-  const [dialog, setDialog] = useState<'edit' | 'assign' | 'reschedule' | 'cancel' | 'followup' | 'model' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'assign' | 'reschedule' | 'part' | 'cancel' | 'approve-cancel' | 'reject-cancel' | 'followup' | 'model' | null>(null);
   const job = q.data;
   const manage = can('jobs.manage') && job && !['completed', 'cancelled'].includes(job.status);
+  // While a technician's cancellation waits for an admin, the only thing to do with the job is decide.
+  const deciding = job?.status === 'cancel_requested';
   const lastVisit = job?.visits?.[job.visits.length - 1];
   const photos = job?.images?.filter((i) => i.type !== 'signature') ?? [];
   const unit = job?.customer_product;
   const inv = job?.invoice;
   const { print, printing } = usePrintJobCard(job?.id);
+  const received = useApiMutation(() => api.post(`/jobs/${id}/part-received`), { invalidate: [['job', String(id)], ['jobs']] });
 
   return (
     <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
@@ -125,51 +130,62 @@ export default function JobDetail() {
               </span>
             }
             description={`Logged ${dateTime(job.created_at)} by ${job.creator?.name ?? 'customer portal'} · ${job.call_age_days ?? 0} day(s) old`}
-            actions={
+          />
+
+          {/* Everything you can do with this job, in one row */}
+          <div className="-mt-2 mb-5 flex flex-wrap items-center gap-2">
+            {manage && !deciding && (
               <>
-                <Button variant="secondary" icon={<Printer className="h-4 w-4" />} loading={printing} onClick={print}>
-                  Print job card
-                </Button>
-                {manage && (
-                  <>
-                    <Hint text="Corrects the product, complaint, priority, call type, location or branch. To change the visit time use Reschedule, and to change the technician use Assign, so the people involved are notified.">
-                      <Button variant="secondary" icon={<Pencil className="h-4 w-4" />} onClick={() => setDialog('edit')}>
-                        Edit
-                      </Button>
-                    </Hint>
-                    <Hint
-                      text={
-                        job.technician
-                          ? 'Hands the job to another technician. The new technician gets a push notification, the previous one is told it was reassigned, and the customer is sent the new technician’s details.'
-                          : 'Picks the technician for this job. They get a push notification and the customer is sent their name and phone number.'
-                      }
-                    >
-                      <Button variant="secondary" icon={<UserCog className="h-4 w-4" />} onClick={() => setDialog('assign')}>
-                        {job.technician ? 'Reassign' : 'Assign'}
-                      </Button>
-                    </Hint>
-                    <Hint text="Moves the visit to a new date and time. The assigned technician is notified.">
-                      <Button variant="secondary" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setDialog('reschedule')}>
-                        Reschedule
-                      </Button>
-                    </Hint>
-                    <Hint text="Closes the job as cancelled, with a reason. Any visit in progress is stopped. This can’t be undone.">
-                      <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<XCircle className="h-4 w-4" />} onClick={() => setDialog('cancel')}>
-                        Cancel job
-                      </Button>
-                    </Hint>
-                  </>
-                )}
-                {can('jobs.manage') && (
-                  <Hint text="Creates a new job linked to this one, copying the customer, product, complaint and technician. Use it for a revisit or a repeat complaint.">
-                    <Button variant="outline" icon={<Repeat2 className="h-4 w-4" />} onClick={() => setDialog('followup')}>
-                      Follow-up call
+                <Hint
+                  text={
+                    job.technician
+                      ? 'Hands the job to another technician. The new technician gets a push notification, the previous one is told it was reassigned, and the customer is sent the new technician’s details.'
+                      : 'Picks the technician for this job. They get a push notification and the customer is sent their name and phone number.'
+                  }
+                >
+                  <Button variant={job.technician ? 'secondary' : 'primary'} icon={<UserCog className="h-4 w-4" />} onClick={() => setDialog('assign')}>
+                    {job.technician ? 'Reassign' : 'Assign'}
+                  </Button>
+                </Hint>
+                <Hint text="Moves the visit to a new date and time. The assigned technician is notified.">
+                  <Button variant="secondary" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setDialog('reschedule')}>
+                    Reschedule
+                  </Button>
+                </Hint>
+                {(job.status === 'open' || job.status === 'pending') && (
+                  <Hint text="Use this when the job can’t go ahead until a part arrives. It stays open and is listed under Part pending until you mark the part received.">
+                    <Button variant="secondary" icon={<PackageSearch className="h-4 w-4" />} onClick={() => setDialog('part')}>
+                      Part pending
                     </Button>
                   </Hint>
                 )}
+                <Hint text="Corrects the product, complaint, priority, call type, location or branch. To change the visit time use Reschedule, and to change the technician use Assign, so the people involved are notified.">
+                  <Button variant="secondary" icon={<Pencil className="h-4 w-4" />} onClick={() => setDialog('edit')}>
+                    Edit
+                  </Button>
+                </Hint>
               </>
-            }
-          />
+            )}
+            <Button variant="secondary" icon={<Printer className="h-4 w-4" />} loading={printing} onClick={print}>
+              Print job card
+            </Button>
+            {can('jobs.manage') && (
+              <Hint text="Creates a new job linked to this one, copying the customer, product, complaint and technician. Use it for a revisit or a repeat complaint.">
+                <Button variant="secondary" icon={<Repeat2 className="h-4 w-4" />} onClick={() => setDialog('followup')}>
+                  Follow-up call
+                </Button>
+              </Hint>
+            )}
+            {manage && !deciding && (
+              <div className="sm:ml-auto">
+                <Hint text="Closes the job as cancelled, with a reason. Any visit in progress is stopped. This can’t be undone.">
+                  <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<XCircle className="h-4 w-4" />} onClick={() => setDialog('cancel')}>
+                    Cancel job
+                  </Button>
+                </Hint>
+              </div>
+            )}
+          </div>
 
           {justCreated && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -187,20 +203,84 @@ export default function JobDetail() {
             </div>
           )}
 
-          {/* Progress + key facts */}
-          <div className="mb-6 space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-card">
+          {deciding && (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+                <div className="min-w-0 text-sm">
+                  <p className="font-semibold text-red-900">
+                    {job.cancel_requester?.name ?? 'The technician'} asked to cancel this job{job.cancel_requested_at ? ` on ${dateTime(job.cancel_requested_at)}` : ''}
+                  </p>
+                  {job.cancel_reason && <p className="break-words text-red-800">Reason: {job.cancel_reason}</p>}
+                </div>
+              </div>
+              {can('jobs.approve_cancel') ? (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setDialog('reject-cancel')}>
+                    Reject
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => setDialog('approve-cancel')}>
+                    Approve & cancel job
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-red-900">Waiting for an admin, coordinator or head engineer to decide.</p>
+              )}
+            </div>
+          )}
+
+          {job.status === 'part_pending' && (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <PackageSearch className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+                <div className="min-w-0 text-sm">
+                  <p className="font-semibold text-red-900">Waiting for a part{job.part_pending_at ? ` since ${date(job.part_pending_at)}` : ''}</p>
+                  {job.part_pending_note && <p className="break-words text-red-800">{job.part_pending_note}</p>}
+                </div>
+              </div>
+              {manage && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setDialog('part')}>
+                    Change note
+                  </Button>
+                  <Hint text="The part has arrived. The job goes back to waiting for a visit and the technician is notified.">
+                    <Button size="sm" icon={<PackageCheck className="h-4 w-4" />} loading={received.isPending} onClick={() => received.mutate(undefined)}>
+                      Part received
+                    </Button>
+                  </Hint>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Overview: where the job stands and the four things people look for first */}
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white shadow-card">
+            <div className="border-b border-slate-100 px-5 py-4">
               <Progress job={job} />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Fact icon={<User className="h-4 w-4" />} label="Customer">
+            <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
+              <Fact
+                icon={<User className="h-4 w-4" />}
+                label="Customer"
+                note={job.customer?.phone && <a href={`tel:${job.customer.phone}`} className="hover:underline">{job.customer.phone}</a>}
+              >
                 <Link to={`/customers/${job.customer_id}`} className="text-brand-700 hover:underline">{job.customer?.name}</Link>
               </Fact>
-              <Fact icon={<Package className="h-4 w-4" />} label="Product">
-                <span className="flex items-center gap-1.5">{unit ? unitLabel(unit) : '—'}{unit && !unit.product_id && <Badge tone="amber">Model pending</Badge>}</span>
+              <Fact icon={<Package className="h-4 w-4" />} label="Product" note={[job.product_category, unit?.serial_no && `S/N ${unit.serial_no}`].filter(Boolean).join(' · ')}>
+                {unit ? unitLabel(unit) : <span className="font-normal text-slate-400">Not recorded</span>}
               </Fact>
-              <Fact icon={<Wrench className="h-4 w-4" />} label="Technician">
-                {job.technician ? job.technician.name : <span className="text-amber-700">Not assigned</span>}
+              <Fact
+                icon={<Wrench className="h-4 w-4" />}
+                label="Technician"
+                note={job.technician?.phone && <a href={`tel:${job.technician.phone}`} className="hover:underline">{job.technician.phone}</a>}
+              >
+                {job.technician ? (
+                  job.technician.name
+                ) : manage ? (
+                  <button type="button" onClick={() => setDialog('assign')} className="text-brand-700 hover:underline">Assign a technician</button>
+                ) : (
+                  <span className="text-amber-700">Not assigned</span>
+                )}
               </Fact>
               <Fact icon={<CalendarClock className="h-4 w-4" />} label="Visit on">
                 {job.scheduled_at ? (
@@ -208,107 +288,118 @@ export default function JobDetail() {
                 ) : manage ? (
                   <button type="button" onClick={() => setDialog('reschedule')} className="text-brand-700 hover:underline">Set visit date</button>
                 ) : (
-                  <span className="text-slate-400">Not scheduled</span>
+                  <span className="font-normal text-slate-400">Not scheduled</span>
                 )}
               </Fact>
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="space-y-6 lg:col-span-2">
-              <Card title="Complaint" actions={job.complaint_type && <Badge tone="blue">{job.complaint_type.name}</Badge>}>
-                <div className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="min-w-0 space-y-6 lg:col-span-2">
+              <Card title="Complaint">
+                <div className="grid gap-4 text-sm sm:grid-cols-2">
                   {[
-                    ['Breakdown', job.complaint_summary?.name ?? '—'],
-                    ['Call type', label(job.call_type)],
-                    ['Visit type', label(job.service_type)],
-                    ['Branch', job.branch?.name ?? '—'],
-                    ['Service location', job.service_location?.name ?? '—'],
+                    ['Service type', job.complaint_type?.name],
+                    ['Breakdown / complaint summary', job.complaint_summary?.name],
                   ].map(([k, v]) => (
                     <div key={k}>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{k}</p>
-                      <p className="mt-0.5 text-slate-900">{v}</p>
+                      <p className="text-xs font-medium text-slate-500">{k}</p>
+                      <p className={cn('mt-0.5 font-medium', v ? 'text-slate-900' : 'font-normal text-slate-400')}>{v ?? '—'}</p>
                     </div>
                   ))}
                 </div>
-                {(job.complaint_details_html || job.complaint_details) && (
-                  <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/70 p-4">
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Details</p>
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <p className="mb-1.5 text-xs font-medium text-slate-500">Job summary</p>
+                  {job.complaint_details_html || job.complaint_details ? (
                     <RichTextView html={job.complaint_details_html} text={job.complaint_details} />
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-sm text-slate-400">Nothing written yet.</p>
+                  )}
+                </div>
               </Card>
 
-              <Card
-                title="Customer & product"
-                actions={
-                  manage && unit && !unit.product_id && (
-                    <Button size="sm" variant="outline" onClick={() => setDialog('model')}>
-                      Set model
-                    </Button>
-                  )
-                }
-              >
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="space-y-1.5 text-sm">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Card title="Customer" className="min-w-0">
+                  <div className="space-y-2.5 text-sm">
                     <div className="flex items-center gap-2.5">
                       <Avatar name={job.customer?.name ?? '?'} />
-                      <Link to={`/customers/${job.customer_id}`} className="font-semibold text-brand-700 hover:underline">
+                      <Link to={`/customers/${job.customer_id}`} className="min-w-0 break-words font-semibold text-brand-700 hover:underline">
                         {job.customer?.name}
                       </Link>
                     </div>
-                    <p className="flex items-center gap-1.5 text-slate-600">
-                      <Phone className="h-3.5 w-3.5" />
-                      <a href={`tel:${job.customer?.phone}`} className="hover:underline">{job.customer?.phone}</a>
-                      {job.customer?.alt_phone && <span>· {job.customer.alt_phone}</span>}
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <Phone className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span className="min-w-0">
+                        <a href={`tel:${job.customer?.phone}`} className="hover:underline">{job.customer?.phone}</a>
+                        {job.customer?.alt_phone && <> · <a href={`tel:${job.customer.alt_phone}`} className="hover:underline">{job.customer.alt_phone}</a></>}
+                      </span>
                     </p>
-                    <p className="flex items-start gap-1.5 text-slate-600"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {[job.customer?.address, job.customer?.city, job.customer?.pincode].filter(Boolean).join(', ') || '—'}</p>
+                    <p className="flex items-start gap-2 text-slate-700">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                      <span className="min-w-0 break-words">{[job.customer?.address, job.customer?.city, job.customer?.pincode].filter(Boolean).join(', ') || <span className="text-slate-400">No address</span>}</span>
+                    </p>
                     {job.customer?.crm_id && <p className="text-xs text-slate-500">CRM ID: {job.customer.crm_id}</p>}
                   </div>
+                </Card>
+
+                <Card title="Product" className="min-w-0">
                   <div className="space-y-2 text-sm">
                     <Row k="Brand" v={unit?.product?.brand?.name ?? unit?.brand?.name ?? '—'} />
                     <Row k="Type" v={unit?.category?.name ?? unit?.product?.category?.name ?? '—'} />
-                    <Row k="Model" v={unit?.product?.model_name ?? <span className="text-amber-700">{unit ? 'Not set yet' : '—'}</span>} />
-                    <Row k="Serial no." v={[unit?.serial_no, unit?.outdoor_serial_no && `Outdoor ${unit.outdoor_serial_no}`].filter(Boolean).join(' · ') || '—'} />
+                    <Row k="Category" v={job.product_category ?? '—'} />
+                    <Row
+                      k="Model"
+                      v={
+                        unit?.model_no ?? (
+                          !unit ? '—' : manage ? (
+                            <button type="button" onClick={() => setDialog('model')} className="font-medium text-brand-700 hover:underline">Set model</button>
+                          ) : (
+                            <span className="text-amber-700">Not set yet</span>
+                          )
+                        )
+                      }
+                    />
+                    <Row k="Serial no." v={unit?.serial_no ?? '—'} />
+                    {unit?.outdoor_serial_no && <Row k="Outdoor serial no." v={unit.outdoor_serial_no} />}
                     <Row
                       k="Warranty"
                       v={
-                        unit ? (
-                          <span className="flex items-center gap-2">
-                            {label(unit.warranty_type)}
+                        unit?.warranty_type || unit?.warranty_expiry ? (
+                          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+                            {unit.warranty_type && label(unit.warranty_type)}
                             {unit.warranty_expiry && <span className="text-slate-500">till {date(unit.warranty_expiry)}</span>}
-                            {unit.under_warranty !== undefined && <Badge tone={unit.under_warranty ? 'green' : 'slate'}>{unit.under_warranty ? 'Covered' : 'Expired'}</Badge>}
+                            {unit.warranty_expiry && <Badge tone={unit.under_warranty ? 'green' : 'slate'}>{unit.under_warranty ? 'Covered' : 'Expired'}</Badge>}
                           </span>
                         ) : '—'
                       }
                     />
+                    {unit?.purchase_date && <Row k="Purchase date" v={date(unit.purchase_date)} />}
                     <Row k="Dealer" v={unit?.dealer?.name ?? '—'} />
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </div>
 
               <Card title={`Visits (${job.visits?.length ?? 0})`} padded={false}>
                 {!job.visits?.length ? (
                   <p className="px-5 py-8 text-center text-sm text-slate-500">No visits yet. The technician starts the service from their app.</p>
                 ) : (
-                  <ol className="relative space-y-0">
+                  <ol className="divide-y divide-slate-100">
                     {job.visits.map((v, i) => (
-                      <li key={v.id} className="relative space-y-3 px-5 py-4 pl-12">
-                        <span className="absolute left-5 top-5 flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">{i + 1}</span>
-                        {i < job.visits!.length - 1 && <span className="absolute bottom-0 left-[29px] top-10 w-px bg-slate-200" />}
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm">
-                            <span className="font-semibold text-slate-900">{dateTime(v.start_time)}</span>
-                            <span className="text-slate-500"> · {v.technician?.name} · {label(v.service_type)} · {duration(v.duration_seconds)}</span>
+                      <li key={v.id} className="relative space-y-2.5 px-5 py-4 pl-14">
+                        <span className="absolute left-5 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">{i + 1}</span>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 text-sm">
+                            <p className="font-semibold text-slate-900">{dateTime(v.start_time)}</p>
+                            <p className="text-xs text-slate-500">{v.technician?.name} · {label(v.service_type)} · {duration(v.duration_seconds)}</p>
                           </div>
                           <StatusBadge status={v.status} />
                         </div>
                         {v.action_taken && <p className="text-sm"><span className="text-slate-500">Action taken:</span> <span className="font-medium">{v.action_taken.name}</span></p>}
-                        {v.service_summary && <p className="text-sm text-slate-700">{v.service_summary}</p>}
+                        {v.service_summary && <p className="break-words text-sm text-slate-700">{v.service_summary}</p>}
                         {!!v.inventory_usage?.length && (
                           <ul className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                             {v.inventory_usage.map((u) => (
-                              <li key={u.id} className="flex justify-between py-0.5">
+                              <li key={u.id} className="flex justify-between gap-3 py-0.5">
                                 <span>{u.item?.name} ({u.item?.code}) × {qty(u.quantity)} {u.item?.unit_of_measure}</span>
                                 <span className="tabular-nums">{money(u.total_price)}</span>
                               </li>
@@ -340,14 +431,16 @@ export default function JobDetail() {
                             </div>
                           ) : null;
                         })()}
-                        {v.status !== 'in_progress' && (
+                        {v.status !== 'in_progress' && (v.total_charge > 0 || v.assisted_staff) && (
                           <div className="flex flex-wrap gap-2 text-xs">
-                            <Badge>Labour {money(v.labour_charge)}</Badge>
-                            <Badge>Spares {money(v.spare_charge)}</Badge>
-                            <Badge tone="blue">Total {money(v.total_charge)}</Badge>
-                            <Badge tone={v.amount_collected > 0 ? 'green' : 'slate'}>
-                              <MethodLabel method={v.payment_method} />{v.amount_collected > 0 && ` · collected ${money(v.amount_collected)}`}
-                            </Badge>
+                            {v.labour_charge > 0 && <Badge>Labour {money(v.labour_charge)}</Badge>}
+                            {v.spare_charge > 0 && <Badge>Spares {money(v.spare_charge)}</Badge>}
+                            {v.total_charge > 0 && <Badge tone="blue">Total {money(v.total_charge)}</Badge>}
+                            {v.total_charge > 0 && v.payment_method && (
+                              <Badge tone={v.amount_collected > 0 ? 'green' : 'slate'}>
+                                <MethodLabel method={v.payment_method} />{v.amount_collected > 0 && ` · collected ${money(v.amount_collected)}`}
+                              </Badge>
+                            )}
                             {v.assisted_staff && <Badge tone="violet">Assisted by {v.assisted_staff.name}</Badge>}
                           </div>
                         )}
@@ -371,7 +464,7 @@ export default function JobDetail() {
               )}
             </div>
 
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               <Card title="Charges & invoice" actions={inv && <StatusBadge status={inv.payment_status} />}>
                 {inv ? (
                   <div className="space-y-2 text-sm">
@@ -403,27 +496,23 @@ export default function JobDetail() {
                 )}
               </Card>
 
-              <Card title="Assignment">
-                {job.technician ? (
-                  <div className="flex items-center gap-3">
-                    <Avatar name={job.technician.name} className="h-10 w-10" />
-                    <div className="text-sm">
-                      <p className="font-semibold text-slate-900">{job.technician.name}</p>
-                      {job.technician.phone && <a href={`tel:${job.technician.phone}`} className="text-slate-600 hover:underline">{job.technician.phone}</a>}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-amber-700">No technician assigned yet.</p>
-                )}
+              <Card title="Job details">
+                <div className="space-y-2 text-sm">
+                  <Row k="Call type" v={label(job.call_type)} />
+                  <Row k="Visit type" v={label(job.service_type)} />
+                  <Row k="Branch" v={job.branch?.name ?? '—'} />
+                  <Row k="Service location" v={job.service_location?.name ?? '—'} />
+                  <Row k="Customer Satisfaction Code" v={job.customer_satisfaction_code ?? '—'} />
+                </div>
                 {job.parent && (
-                  <p className="mt-3 flex items-center gap-1 text-sm">
+                  <p className="mt-3 flex items-center gap-1 border-t border-slate-100 pt-3 text-sm">
                     <CornerDownRight className="h-4 w-4 text-slate-400" /> Follow-up of{' '}
                     <Link className="font-medium text-brand-700 hover:underline" to={`/jobs/${job.parent.id}`}>{job.parent.crm_call_id}</Link>
                   </p>
                 )}
                 {!!job.follow_ups?.length && (
-                  <div className="mt-3 space-y-1 text-sm">
-                    <p className="text-xs font-medium uppercase text-slate-500">Follow-ups</p>
+                  <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm">
+                    <p className="text-xs font-medium text-slate-500">Follow-ups</p>
                     {job.follow_ups.map((fu) => (
                       <Link key={fu.id} to={`/jobs/${fu.id}`} className="flex items-center justify-between rounded-md px-2 py-1 hover:bg-slate-50">
                         <span className="font-medium text-brand-700">{fu.crm_call_id}</span>
@@ -448,7 +537,7 @@ export default function JobDetail() {
                   {job.status_history?.map((h) => (
                     <li key={h.id} className="relative">
                       <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-brand-600 ring-1 ring-brand-200" />
-                      <p className="text-sm text-slate-800">{h.remarks ?? label(h.status)}</p>
+                      <p className="break-words text-sm text-slate-800">{h.remarks ?? label(h.status)}</p>
                       <p className="text-xs text-slate-500">{dateTime(h.changed_at)} {h.user && `· ${h.user.name}`}</p>
                     </li>
                   ))}
@@ -461,7 +550,10 @@ export default function JobDetail() {
           {dialog === 'model' && unit && <SetModelDialog job={job} unit={unit} onClose={() => setDialog(null)} />}
           <AssignDialog job={job} open={dialog === 'assign'} onClose={() => setDialog(null)} />
           <RescheduleDialog job={job} open={dialog === 'reschedule'} onClose={() => setDialog(null)} />
-          <CancelDialog job={job} open={dialog === 'cancel'} onClose={() => setDialog(null)} />
+          {dialog === 'part' && <PartPendingDialog job={job} onClose={() => setDialog(null)} />}
+          {dialog === 'cancel' && <CancelDialog job={job} onClose={() => setDialog(null)} />}
+          {dialog === 'approve-cancel' && <CancelDialog job={job} approving onClose={() => setDialog(null)} />}
+          {dialog === 'reject-cancel' && <RejectCancelDialog job={job} onClose={() => setDialog(null)} />}
           <FollowUpDialog job={job} open={dialog === 'followup'} onClose={() => setDialog(null)} />
         </>
       )}
@@ -469,21 +561,11 @@ export default function JobDetail() {
   );
 }
 
-/** Fill in the unit's model once it is known (the job was logged with only the brand). */
+/** Fill in the unit's model once it is known (the job was logged without it). */
 function SetModelDialog({ job, unit, onClose }: { job: Job; unit: CustomerProduct; onClose: () => void }) {
-  const [draft, setDraft] = useState<ProductDraft>({
-    product_id: '',
-    brand_id: String(unit.brand_id ?? ''),
-    category_id: String(unit.category_id ?? ''),
-    serial_no: unit.serial_no ?? '',
-    outdoor_serial_no: unit.outdoor_serial_no ?? '',
-    purchase_date: unit.purchase_date ?? '',
-    warranty_type: unit.warranty_type ?? '',
-    warranty_expiry: unit.warranty_expiry ?? '',
-    dealer_id: String(unit.dealer_id ?? ''),
-  });
+  const [draft, setDraft] = useState<ProductDraft>(unitDraft(unit));
   const m = useApiMutation((body: object) => api.patch(`/customers/${job.customer_id}/products/${unit.id}`, body), {
-    invalidate: [['job', String(job.id)], ['customer', String(job.customer_id)]],
+    invalidate: [['job', String(job.id)], ['customer', String(job.customer_id)], ['lookups']],
     onSuccess: onClose,
   });
   return (
@@ -491,15 +573,14 @@ function SetModelDialog({ job, unit, onClose }: { job: Job; unit: CustomerProduc
       open
       onClose={onClose}
       title="Set the unit’s model"
-      description="Pick or add the model now that it’s known. Brand and type follow the model."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={m.isPending} disabled={!draft.product_id} onClick={() => m.mutate(productPayload(draft))}>Save model</Button>
+          <Button loading={m.isPending} disabled={!draft.model_no.trim()} onClick={() => m.mutate(productPayload(draft))}>Save model</Button>
         </>
       }
     >
-      <ProductFields value={draft} onChange={setDraft} error={m.error instanceof ApiError ? m.error : null} title={null} />
+      <ModelField value={draft.model_no} onChange={(v) => setDraft({ ...draft, model_no: v })} brandId={draft.brand_id} error={m.error instanceof ApiError ? m.error.field('model_no') : undefined} />
     </Modal>
   );
 }
@@ -510,21 +591,13 @@ function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
   const s = (v: number | null | undefined) => (v == null ? '' : String(v));
   const unit = job.customer_product;
   // The product was logged with just its brand; model, serial and warranty are completed here.
-  const [product, setProduct] = useState<ProductDraft>({
-    product_id: s(unit?.product_id),
-    brand_id: s(unit?.brand_id ?? unit?.product?.brand?.id),
-    category_id: s(unit?.category_id ?? unit?.product?.category?.id),
-    serial_no: unit?.serial_no ?? '',
-    outdoor_serial_no: unit?.outdoor_serial_no ?? '',
-    purchase_date: unit?.purchase_date ?? '',
-    warranty_type: unit?.warranty_type ?? '',
-    warranty_expiry: unit?.warranty_expiry ?? '',
-    dealer_id: s(unit?.dealer_id),
-  });
+  const [product, setProduct] = useState<ProductDraft>(unitDraft(unit));
   const [form, setForm] = useState({
     complaint_type_id: s(job.complaint_type_id),
     complaint_summary_id: s(job.complaint_summary_id),
     complaint_details: job.complaint_details_html ?? job.complaint_details ?? '',
+    product_category: job.product_category ?? '',
+    customer_satisfaction_code: job.customer_satisfaction_code ?? '',
     priority: job.priority as string,
     call_type: job.call_type,
     service_location_id: s(job.service_location_id),
@@ -543,7 +616,7 @@ function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
     async (body: object) => {
       // 1. Save the product details (update the job's product, or record one if it had none).
       let productId = job.customer_product_id;
-      const hasProduct = product.brand_id || product.product_id || product.category_id || product.serial_no.trim();
+      const hasProduct = product.brand_id || product.model_no.trim() || product.category_id || product.serial_no.trim();
       if (productId) {
         await api.patch(`/customers/${job.customer_id}/products/${productId}`, productPayload(product));
       } else if (hasProduct) {
@@ -553,7 +626,7 @@ function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
       return api.patch(`/jobs/${job.id}`, { ...body, customer_product_id: productId ?? null });
     },
     {
-      invalidate: [['job', String(job.id)], ['jobs']],
+      invalidate: [['job', String(job.id)], ['jobs'], ['lookups']],
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: ['customer', String(job.customer_id)] });
         onClose();
@@ -586,6 +659,8 @@ function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
                 service_location_id: id(form.service_location_id),
                 branch_id: id(form.branch_id),
                 complaint_details: form.complaint_details || null,
+                product_category: form.product_category.trim() || null,
+                customer_satisfaction_code: form.customer_satisfaction_code.trim() || null,
               })
             }
           >
@@ -595,9 +670,15 @@ function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
       }
     >
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Product details</p>
-      <ProductFields value={product} onChange={setProduct} error={m.error instanceof ApiError ? m.error : null} title={null} />
+      <ProductFields
+        value={product}
+        onChange={setProduct}
+        error={m.error instanceof ApiError ? m.error : null}
+        title={null}
+        extra={<ProductCategoryField value={form.product_category} onChange={(v) => set('product_category', v)} error={f('product_category')} />}
+      />
       <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Complaint & job</p>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Service type" error={f('complaint_type_id')}>
           <Combobox
             value={form.complaint_type_id}
@@ -611,8 +692,11 @@ function EditJobDialog({ job, onClose }: { job: Job; onClose: () => void }) {
         <Field label="Breakdown / complaint summary" error={f('complaint_summary_id')}>
           <Combobox value={form.complaint_summary_id} onChange={(v) => set('complaint_summary_id', v)} options={summaries} placeholder={summaries.length ? 'Select…' : 'None configured'} disabled={!summaries.length} aria-label="Complaint summary" searchable />
         </Field>
-        <Field label="Details" className="sm:col-span-2" error={f('complaint_details')}>
+        <Field label="Job summary" className="sm:col-span-2" error={f('complaint_details')}>
           <RichTextField value={form.complaint_details} onChange={(html) => set('complaint_details', html)} />
+        </Field>
+        <Field label="Customer Satisfaction Code" className="sm:col-span-2" error={f('customer_satisfaction_code')} hint="Given by the customer. The technician usually enters it.">
+          <Input value={form.customer_satisfaction_code} onChange={(e) => set('customer_satisfaction_code', e.target.value)} maxLength={50} autoComplete="off" />
         </Field>
         <Field label="Priority" required>
           <Select value={form.priority} onChange={(e) => set('priority', e.target.value)}>
@@ -714,6 +798,34 @@ function AssignDialog({ job, open, onClose }: { job: Job; open: boolean; onClose
   );
 }
 
+/** Parks the job until a part arrives; opened again, it corrects the note. */
+function PartPendingDialog({ job, onClose }: { job: Job; onClose: () => void }) {
+  const [note, setNote] = useState(job.part_pending_note ?? '');
+  const m = useApiMutation((body: object) => api.post(`/jobs/${job.id}/part-pending`, body), { invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Waiting for a part"
+      description="The job stays open and is listed under Part pending until you mark the part received."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Go back
+          </Button>
+          <Button loading={m.isPending} disabled={!note.trim()} onClick={() => m.mutate({ note: note.trim() })}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <Field label="Which part is needed?" required error={fieldError(m.error, 'note') ?? fieldError(m.error, 'status')}>
+        <Textarea autoFocus rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Compressor 1.5 ton, ordered from the dealer on Monday" />
+      </Field>
+    </Modal>
+  );
+}
+
 function RescheduleDialog({ job, open, onClose }: { job: Job; open: boolean; onClose: () => void }) {
   const [when, setWhen] = useState(toLocalInput(job.scheduled_at));
   const [reason, setReason] = useState('');
@@ -746,23 +858,59 @@ function RescheduleDialog({ job, open, onClose }: { job: Job; open: boolean; onC
   );
 }
 
-function CancelDialog({ job, open, onClose }: { job: Job; open: boolean; onClose: () => void }) {
-  const [reason, setReason] = useState('');
-  const m = useApiMutation((body: object) => api.post(`/jobs/${job.id}/cancel`, body), { invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
+/** Closes the job as cancelled. It can't be saved without a reason; approving starts from the technician's. */
+function CancelDialog({ job, approving = false, onClose }: { job: Job; approving?: boolean; onClose: () => void }) {
+  const [reason, setReason] = useState(approving ? job.cancel_reason ?? '' : '');
+  const m = useApiMutation((body: object) => api.post(`/jobs/${job.id}/cancel${approving ? '/approve' : ''}`, body), { toastValidation: false, invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
   return (
-    <ConfirmDialog
-      open={open}
+    <Modal
+      open
       onClose={onClose}
-      title="Cancel this job?"
-      message="The job will be closed as cancelled. Any running visit is stopped. This cannot be undone."
-      confirmLabel="Cancel job"
-      loading={m.isPending}
-      onConfirm={() => m.mutate({ reason })}
+      title={approving ? 'Approve the cancellation?' : 'Cancel this job?'}
+      description={approving ? 'The job closes as cancelled and the technician is told. This can’t be undone.' : 'The job closes as cancelled and any running visit is stopped. This can’t be undone.'}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Go back
+          </Button>
+          <Button variant="danger" loading={m.isPending} disabled={!reason.trim()} onClick={() => m.mutate({ reason: reason.trim() })}>
+            {approving ? 'Approve & cancel job' : 'Cancel job'}
+          </Button>
+        </>
+      }
     >
-      <Field label="Reason" required error={fieldError(m.error, 'reason')}>
-        <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+      <Field label="Reason for cancelling" required error={fieldError(m.error, 'reason') ?? fieldError(m.error, 'status')}>
+        <Textarea autoFocus rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Customer has sold the unit" />
       </Field>
-    </ConfirmDialog>
+    </Modal>
+  );
+}
+
+/** Keeps the job open: it goes back to Pending and the technician sees why. */
+function RejectCancelDialog({ job, onClose }: { job: Job; onClose: () => void }) {
+  const [note, setNote] = useState('');
+  const m = useApiMutation((body: object) => api.post(`/jobs/${job.id}/cancel/reject`, body), { toastValidation: false, invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Reject the cancellation?"
+      description="The job goes back to Pending and the technician is told why."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Go back
+          </Button>
+          <Button loading={m.isPending} disabled={!note.trim()} onClick={() => m.mutate({ note: note.trim() })}>
+            Reject cancellation
+          </Button>
+        </>
+      }
+    >
+      <Field label="Why does the job stay open?" required error={fieldError(m.error, 'note') ?? fieldError(m.error, 'status')}>
+        <Textarea autoFocus rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Customer still wants the repair" />
+      </Field>
+    </Modal>
   );
 }
 

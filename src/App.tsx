@@ -17,6 +17,7 @@ const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'));
 const JobsPage = lazy(() => import('@/pages/jobs/JobsPage'));
 const JobCreate = lazy(() => import('@/pages/jobs/JobCreate'));
 const JobDetail = lazy(() => import('@/pages/jobs/JobDetail'));
+const ServiceLocations = lazy(() => import('@/pages/jobs/ServiceLocations'));
 const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
 const CustomerDetail = lazy(() => import('@/pages/customers/CustomerDetail'));
 const InvoicesPage = lazy(() => import('@/pages/invoices/InvoicesPage'));
@@ -138,6 +139,7 @@ export default function App() {
               <Route path="/jobs" element={<Office ability="jobs.view"><JobsPage /></Office>} />
               <Route path="/jobs/new" element={<Office ability="jobs.manage"><JobCreate /></Office>} />
               <Route path="/jobs/:id" element={<Office ability="jobs.view"><JobDetail /></Office>} />
+              <Route path="/service-locations" element={<Office ability="jobs.view"><ServiceLocations /></Office>} />
               <Route path="/customers" element={<Office ability="customers.view"><CustomersPage /></Office>} />
               <Route path="/customers/:id" element={<Office ability="customers.view"><CustomerDetail /></Office>} />
               <Route path="/invoices" element={<Office ability="invoices.view"><InvoicesPage /></Office>} />

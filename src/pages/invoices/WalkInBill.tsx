@@ -38,6 +38,8 @@ export default function WalkInBill() {
   const [picking, setPicking] = useState(false);
   const [discount, setDiscount] = useState('');
   const [notes, setNotes] = useState('');
+  // Null: follow Settings until someone chooses.
+  const [gstChoice, setGstChoice] = useState<boolean | null>(null);
   const [method, setMethod] = useState('cash');
   const [paid, setPaid] = useState<string | null>(null); // null = follow the bill total
   const [reference, setReference] = useState('');
@@ -86,6 +88,7 @@ export default function WalkInBill() {
         })),
         discount: discountMinor || null,
         notes: notes.trim() || null,
+        is_gst: gstRegistered ? isGst : null,
         payment_method: method,
         amount_paid: isCredit ? null : paidMinor,
         reference_no: reference.trim() || null,
@@ -105,6 +108,8 @@ export default function WalkInBill() {
   const f = (n: string) => error?.field(n);
   const lineError = (i: number) => ['description', 'item_id', 'quantity', 'unit_price'].map((k) => f(`items.${i}.${k}`)).find(Boolean);
   const branches = lookups?.branches ?? [];
+  const gstRegistered = !!lookups?.billing.gst_registered;
+  const isGst = gstChoice ?? lookups?.billing.walkin_bills !== 'non_gst';
 
   return (
     <form onSubmit={submit}>
@@ -221,6 +226,24 @@ export default function WalkInBill() {
         <div className="space-y-6">
           <Card title="Bill">
             <div className="space-y-4">
+              {gstRegistered && (
+                <Field label="Bill type" error={f('is_gst')} hint={isGst ? 'Prices include GST. The bill shows the tax split out.' : 'No GST is shown on this bill. The total stays the same.'}>
+                  <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="radiogroup" aria-label="Bill type">
+                    {([[true, 'GST bill'], [false, 'Non-GST bill']] as const).map(([value, text]) => (
+                      <button
+                        key={text}
+                        type="button"
+                        role="radio"
+                        aria-checked={isGst === value}
+                        onClick={() => setGstChoice(value)}
+                        className={cn('rounded-md px-2 py-1.5 text-sm font-medium transition', isGst === value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
               {branches.length > 1 && (
                 <Field label="Branch" error={f('branch_id')} hint="Parts are taken from this branch’s stock.">
                   <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>

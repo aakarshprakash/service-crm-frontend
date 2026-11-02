@@ -59,7 +59,7 @@ export default function CustomerDetail() {
     setProduct({
       id: p.id,
       draft: {
-        product_id: String(p.product_id ?? ''),
+        model_no: p.model_no ?? '',
         brand_id: String(p.brand_id ?? p.product?.brand?.id ?? ''),
         category_id: String(p.category_id ?? ''),
         serial_no: p.serial_no ?? '',
@@ -200,7 +200,7 @@ export default function CustomerDetail() {
                               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><Package className="h-4 w-4" /></span>
                               <div className="min-w-0">
                                 <p className="truncate font-semibold text-slate-900">{p.product?.brand?.name ?? p.brand?.name ?? 'Product'}</p>
-                                <p className="truncate text-xs text-slate-500">{[p.category?.name, p.product?.model_name].filter(Boolean).join(' · ') || 'Type and model not set'}</p>
+                                <p className="truncate text-xs text-slate-500">{[p.category?.name, p.model_no].filter(Boolean).join(' · ') || 'Type and model not set'}</p>
                               </div>
                             </div>
                             {can('customers.manage') && (
@@ -218,7 +218,7 @@ export default function CustomerDetail() {
                             <dd className="truncate text-right text-slate-800">{p.dealer?.name ?? '—'}</dd>
                           </dl>
                           <div className="mt-3 flex flex-wrap gap-1.5">
-                            {!p.product_id && <Badge tone="amber">Model pending</Badge>}
+                            {!p.model_no && <Badge tone="amber">Model pending</Badge>}
                             {p.warranty_type && <Badge tone={covered ? 'green' : 'slate'}>{label(p.warranty_type)}{p.warranty_expiry ? ` · till ${date(p.warranty_expiry)}` : ''}</Badge>}
                           </div>
                         </div>

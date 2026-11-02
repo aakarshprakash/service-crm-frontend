@@ -154,7 +154,7 @@ function ReportViewer({ reportKey, meta, onBack }: { reportKey: string; meta?: R
             <>
               <Select value={filters.status ?? ''} onChange={(e) => set('status', e.target.value)} className="sm:w-40" aria-label="Status">
                 <option value="">Any status</option>
-                {['open', 'in_progress', 'pending', 'completed', 'cancelled'].map((s) => (
+                {['open', 'in_progress', 'pending', 'part_pending', 'cancel_requested', 'completed', 'cancelled'].map((s) => (
                   <option key={s} value={s}>
                     {s.replace('_', ' ')}
                   </option>

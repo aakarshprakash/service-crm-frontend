@@ -11,7 +11,8 @@ import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useLookups, useNow, useStaffOptions } from '@/lib/hooks';
 import { date, dateTime, label, money, qty, toMajor, toMinor } from '@/lib/format';
 import { cn, compressImage, getPosition } from '@/lib/utils';
-import type { InventoryItem, Invoice, Job, Payment, Visit } from '@/lib/types';
+import { unitLabel, type InventoryItem, type Invoice, type Job, type Payment, type Visit } from '@/lib/types';
+import { ModelField } from '@/pages/customers/CustomerForm';
 import { Badge, Button, Card, Combobox, ConfirmDialog, DataTable, DefinitionList, Field, Input, Modal, QueryState, Select, Spinner, Tabs, Textarea, toast } from '@/components/ui';
 import { MapEmbed, MethodLabel, PriorityBadge, StatusBadge } from '@/components/domain';
 import { RecordPayment } from '@/pages/invoices/InvoiceDetail';
@@ -48,7 +49,7 @@ export default function TechJobDetail() {
           ) : (
             <>
               <JobInfo job={job} />
-              {['open', 'pending'].includes(job.status) && (
+              {['open', 'pending', 'part_pending'].includes(job.status) && (
                 <div className="sticky bottom-20 z-10 lg:bottom-4">
                   <Hint block text={t('job.startHint')}>
                     <Button size="lg" className="w-full shadow-lg" icon={<Wrench className="h-5 w-5" />} onClick={() => setStarting(true)}>
@@ -112,7 +113,7 @@ function JobInfo({ job }: { job: Job }) {
           items={[
             [t('job.complaint'), job.complaint_type?.name ?? '—'],
             [t('job.summary'), job.complaint_summary?.name ?? '—'],
-            [t('job.product'), [p?.product?.brand?.name, p?.product?.model_name].filter(Boolean).join(' ') || '—'],
+            [t('job.product'), unitLabel(p) || '—'],
             [t('job.serialNo'), p?.serial_no ?? '—'],
             [t('job.outdoorSerial'), p?.outdoor_serial_no ?? '—'],
             [t('job.warranty'), p ? <span className="flex items-center gap-1">{label(p.warranty_type)} {p.under_warranty !== undefined && <Badge tone={p.under_warranty ? 'green' : 'slate'}>{p.under_warranty ? t('job.covered') : t('job.expired')}</Badge>}</span> : '—'],
@@ -123,6 +124,8 @@ function JobInfo({ job }: { job: Job }) {
           ]}
         />
         {job.complaint_details && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">{job.complaint_details}</p>}
+        {job.status === 'part_pending' && job.part_pending_note && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{t('job.waitingForPart', { note: job.part_pending_note })}</p>}
+        {job.status === 'cancel_requested' && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{t('job.cancelWaiting', { reason: job.cancel_reason ?? '' })}</p>}
       </Card>
       {!!history.length && (
         <Card title={t('job.visitHistory')} padded={false}>
@@ -221,7 +224,7 @@ function StartServiceDialog({ job, onClose }: { job: Job; onClose: () => void })
         </div>
         <div className="rounded-lg bg-slate-50 p-3 text-sm">
           <p className="mb-1 text-xs font-semibold uppercase text-slate-500">{t('job.confirmProduct')}</p>
-          <p>{[p?.product?.brand?.name, p?.product?.model_name].filter(Boolean).join(' ') || t('job.productNotSpecified')}</p>
+          <p>{unitLabel(p) || t('job.productNotSpecified')}</p>
           <p className="text-slate-600">{t('common.sn')} {p?.serial_no ?? '—'} {p?.outdoor_serial_no && `· ${t('job.outdoor')} ${p.outdoor_serial_no}`}</p>
           <p className="text-xs text-slate-500">{t('job.correctSerial')}</p>
         </div>
@@ -307,8 +310,10 @@ function CallTab({ job, visit }: { job: Job; visit: Visit }) {
     alt_phone: job.customer?.alt_phone ?? '',
     serial_no: job.customer_product?.serial_no ?? '',
     outdoor_serial_no: job.customer_product?.outdoor_serial_no ?? '',
+    model_no: job.customer_product?.model_no ?? '',
+    customer_satisfaction_code: job.customer_satisfaction_code ?? '',
   });
-  const m = useApiMutation(() => api.patch(`/visits/${visit.id}`, { ...form, complaint_type_id: form.complaint_type_id || null, alt_phone: form.alt_phone || null }), {
+  const m = useApiMutation(() => api.patch(`/visits/${visit.id}`, { ...form, complaint_type_id: form.complaint_type_id || null, alt_phone: form.alt_phone || null, model_no: form.model_no.trim() || null, customer_satisfaction_code: form.customer_satisfaction_code.trim() || null }), {
     toastValidation: false,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tech-job', String(job.id)] }),
   });
@@ -343,7 +348,7 @@ function CallTab({ job, visit }: { job: Job; visit: Visit }) {
               <option value="high">{t('priority.high')}</option>
             </Select>
           </Field>
-          <Field label={t('job.complaint')} className="sm:col-span-2">
+          <Field label={t('job.jobSummary')} className="sm:col-span-2">
             <Textarea rows={2} value={form.complaint_details} onChange={(ev) => setForm({ ...form, complaint_details: ev.target.value })} />
           </Field>
           <Field label={t('common.address')} className="sm:col-span-2" error={e('address')}>
@@ -358,11 +363,15 @@ function CallTab({ job, visit }: { job: Job; visit: Visit }) {
           <Field label={t('job.altPhone')} error={e('alt_phone')}>
             <Input value={form.alt_phone} inputMode="tel" onChange={(ev) => setForm({ ...form, alt_phone: ev.target.value })} />
           </Field>
+          <ModelField label={t('job.model')} value={form.model_no} onChange={(v) => setForm({ ...form, model_no: v })} brandId={String(job.customer_product?.brand_id ?? '')} error={e('model_no')} disabled={!job.customer_product} />
           <Field label={t('job.serialNo')}>
             <Input value={form.serial_no} onChange={(ev) => setForm({ ...form, serial_no: ev.target.value })} disabled={!job.customer_product} />
           </Field>
           <Field label={t('job.outdoorSerial')}>
             <Input value={form.outdoor_serial_no} onChange={(ev) => setForm({ ...form, outdoor_serial_no: ev.target.value })} disabled={!job.customer_product} />
+          </Field>
+          <Field label={t('job.satisfactionCode')} error={e('customer_satisfaction_code')} hint={t('job.satisfactionHint')}>
+            <Input value={form.customer_satisfaction_code} maxLength={50} autoComplete="off" onChange={(ev) => setForm({ ...form, customer_satisfaction_code: ev.target.value })} />
           </Field>
         </div>
         <MapEmbed lat={visit.location_lat} lng={visit.location_lng} label={t('job.visitLocation')} />
@@ -618,9 +627,10 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
   const usageTotal = (visit.inventory_usage ?? []).reduce((a, u) => a + u.total_price, 0);
   const previousBalance = job.invoice?.balance_amount ?? 0;
   const [form, setForm] = useState({
-    status: 'completed' as 'completed' | 'pending' | 'cancelled',
+    status: 'completed' as 'completed' | 'pending' | 'part_pending' | 'cancelled',
     action_taken_id: '',
     service_summary: visit.service_summary ?? '',
+    customer_satisfaction_code: job.customer_satisfaction_code ?? '',
     assisted_staff_id: '',
     labour_charge: '',
     spare_charge: toMajor(usageTotal),
@@ -661,6 +671,7 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
         status: form.status,
         action_taken_id: form.action_taken_id ? Number(form.action_taken_id) : null,
         service_summary: form.service_summary,
+        customer_satisfaction_code: form.customer_satisfaction_code.trim() || null,
         assisted_staff_id: form.assisted_staff_id ? Number(form.assisted_staff_id) : null,
         labour_charge: toMinor(form.labour_charge),
         spare_charge: toMinor(form.spare_charge),
@@ -677,7 +688,7 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
         qc.invalidateQueries({ queryKey: ['tech-job', String(job.id)] });
         qc.invalidateQueries({ queryKey: ['tech-dashboard'] });
         qc.invalidateQueries({ queryKey: ['tech-jobs'] });
-        onCompleted({ invoice: r.data.invoice, payment: r.data.payment, status: form.status });
+        onCompleted({ invoice: r.data.invoice, payment: r.data.payment, status: form.status === 'cancelled' ? 'cancel_requested' : form.status });
       },
     },
   );
@@ -695,8 +706,8 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
     <Card>
       <div className="space-y-4">
         <Field label={t('job.visitStatus')} required>
-          <div className="grid grid-cols-3 gap-2">
-            {(['completed', 'pending', 'cancelled'] as const).map((s) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(['completed', 'pending', 'part_pending', 'cancelled'] as const).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -718,8 +729,11 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
             aria-label={t('job.actionTaken')}
           />
         </Field>
-        <Field label={t('job.serviceSummary')} required error={e('service_summary')}>
-          <Textarea rows={3} value={form.service_summary} onChange={(ev) => setForm({ ...form, service_summary: ev.target.value })} placeholder={t('job.summaryPlaceholder')} />
+        <Field label={t('job.satisfactionCode')} error={e('customer_satisfaction_code')} hint={t('job.satisfactionHint')}>
+          <Input value={form.customer_satisfaction_code} maxLength={50} autoComplete="off" onChange={(ev) => setForm({ ...form, customer_satisfaction_code: ev.target.value })} />
+        </Field>
+        <Field label={form.status === 'cancelled' ? t('job.cancelReason') : t('job.serviceSummary')} required error={e('service_summary')}>
+          <Textarea rows={3} value={form.service_summary} onChange={(ev) => setForm({ ...form, service_summary: ev.target.value })} placeholder={form.status === 'cancelled' ? t('job.cancelReasonPlaceholder') : t('job.summaryPlaceholder')} />
         </Field>
         <Field label={t('job.assistedBy')}>
           <Select value={form.assisted_staff_id} onChange={(ev) => setForm({ ...form, assisted_staff_id: ev.target.value })}>
@@ -819,10 +833,10 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
 
         <Hint
           block
-          text={form.status === 'completed' ? t('job.completeHint') : form.status === 'pending' ? t('job.pendingHint') : t('job.cancelHint')}
+          text={form.status === 'completed' ? t('job.completeHint') : form.status === 'pending' ? t('job.pendingHint') : form.status === 'part_pending' ? t('job.partPendingHint') : t('job.cancelHint')}
         >
           <Button size="lg" className="w-full" variant={form.status === 'cancelled' ? 'danger' : 'primary'} icon={<CheckCircle2 className="h-5 w-5" />} onClick={() => setConfirming(true)}>
-            {form.status === 'completed' ? t('job.saveInvoice') : form.status === 'pending' ? t('job.savePending') : t('job.cancelJob')}
+            {form.status === 'completed' ? t('job.saveInvoice') : form.status === 'pending' ? t('job.savePending') : form.status === 'part_pending' ? t('job.savePartPending') : t('job.cancelJob')}
           </Button>
         </Hint>
       </div>
@@ -830,7 +844,7 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
         open={confirming}
         onClose={() => setConfirming(false)}
         tone={form.status === 'cancelled' ? 'danger' : 'primary'}
-        title={form.status === 'completed' ? t('job.confirmComplete') : form.status === 'pending' ? t('job.confirmPending') : t('job.confirmCancel')}
+        title={form.status === 'completed' ? t('job.confirmComplete') : form.status === 'pending' ? t('job.confirmPending') : form.status === 'part_pending' ? t('job.confirmPartPending') : t('job.confirmCancel')}
         message={
           <>
             {form.status !== 'cancelled' && <>{t('job.totalCharge', { amount: money(total) })} </>}

@@ -5,7 +5,7 @@ import { MapPin } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useListQuery } from '@/lib/hooks';
 import { dateTime } from '@/lib/format';
-import type { Job, JobStatus } from '@/lib/types';
+import { unitLabel, type Job, type JobStatus } from '@/lib/types';
 import { Card, EmptyState, Pagination, SearchInput, Tabs } from '@/components/ui';
 import { PriorityBadge, StatusBadge } from '@/components/domain';
 
@@ -25,7 +25,7 @@ export default function TechJobs() {
           className="mb-3"
           value={status}
           onChange={(v) => list.setFilter('status', v)}
-          tabs={(['open', 'in_progress', 'pending', 'completed'] as JobStatus[]).map((s) => ({ value: s, label: t(`status.${s}`), count: counts.data?.[s] }))}
+          tabs={(['open', 'in_progress', 'pending', 'part_pending', 'cancel_requested', 'completed'] as JobStatus[]).map((s) => ({ value: s, label: t(`status.${s}`), count: counts.data?.[s] }))}
         />
       )}
       <Card padded={false}>
@@ -47,7 +47,7 @@ export default function TechJobs() {
                   </div>
                   <p className="mt-1 text-sm text-slate-800">{j.customer?.name} · {j.customer?.phone}</p>
                   <p className="truncate text-xs text-slate-500">
-                    {[j.customer_product?.product?.brand?.name, j.customer_product?.product?.model_name].filter(Boolean).join(' ')} {j.complaint_type?.name && `· ${j.complaint_type.name}`}
+                    {unitLabel(j.customer_product)} {j.complaint_type?.name && `· ${j.complaint_type.name}`}
                   </p>
                   <p className="mt-1 flex items-center justify-between text-xs text-slate-500">
                     <span className="flex items-center gap-1 truncate">

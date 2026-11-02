@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { ExternalLink, MapPin, Star } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import type { JobStatus, Priority } from '@/lib/types';
+import type { JobAgeSettings, JobStatus, Priority } from '@/lib/types';
 
 const statusTone: Record<string, 'slate' | 'blue' | 'amber' | 'green' | 'red' | 'violet' | 'sky'> = {
   open: 'sky',
   in_progress: 'violet',
   pending: 'amber',
+  part_pending: 'red',
+  cancel_requested: 'red',
   completed: 'green',
   cancelled: 'slate',
   unpaid: 'red',
@@ -49,7 +51,24 @@ export function MethodLabel({ method }: { method: string | null | undefined }) {
   return <>{t(`method.${method}`, { defaultValue: method })}</>;
 }
 
-export const JOB_STATUSES: JobStatus[] = ['open', 'in_progress', 'pending', 'completed', 'cancelled'];
+export const JOB_STATUSES: JobStatus[] = ['open', 'in_progress', 'pending', 'part_pending', 'cancel_requested', 'completed', 'cancelled'];
+
+/** How old an unfinished job is getting, oldest first, from the days set in Settings. Closed jobs' clocks have stopped, so they're never highlighted. */
+export function ageBands(days: JobAgeSettings = { warning: 3, old: 7, critical: 14 }) {
+  const range = (from: number, next: number) => (next - 1 === from ? `${from} days` : `${from}–${next - 1} days`);
+  return [
+    { from: days.critical, label: `${days.critical}+ days`, row: 'bg-red-50/70 [&>td:first-child]:shadow-[inset_3px_0_0_0_#ef4444]', pill: 'bg-red-100 text-red-800', dot: 'bg-red-500', card: 'border-l-4 border-l-red-500' },
+    { from: days.old, label: range(days.old, days.critical), row: 'bg-orange-50/70 [&>td:first-child]:shadow-[inset_3px_0_0_0_#f97316]', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', card: 'border-l-4 border-l-orange-500' },
+    { from: days.warning, label: range(days.warning, days.old), row: 'bg-amber-50/70 [&>td:first-child]:shadow-[inset_3px_0_0_0_#f59e0b]', pill: 'bg-amber-100 text-amber-900', dot: 'bg-amber-500', card: 'border-l-4 border-l-amber-500' },
+  ];
+}
+
+export type AgeBand = ReturnType<typeof ageBands>[number];
+
+export function ageBand(job: { status: string; call_age_days?: number | null }, bands: AgeBand[]) {
+  if (job.status === 'completed' || job.status === 'cancelled') return undefined;
+  return bands.find((b) => (job.call_age_days ?? 0) >= b.from);
+}
 
 /** Location preview without an API key (OpenStreetMap) + deep link to Google Maps. */
 export function MapEmbed({ lat, lng, label, className }: { lat: number | null | undefined; lng: number | null | undefined; label?: string; className?: string }) {

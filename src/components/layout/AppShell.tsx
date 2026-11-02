@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, Boxes, Building2, CalendarCheck, ChevronDown, ChevronsLeft, ChevronsRight, ClipboardList, CreditCard, FileBarChart, Gauge, Hammer, Home, Landmark,
-  LayoutDashboard, LogIn, LogOut, Menu, Package, Receipt, Settings, ShieldCheck, Sparkles, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
+  LayoutDashboard, LogIn, LogOut, MapPin, Menu, Package, Receipt, Settings, ShieldCheck, Sparkles, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { api, setToken, type Paginated } from '@/lib/api';
@@ -81,6 +81,7 @@ function useNav(): NavSection[] {
       label: t('section.service'),
       items: [
         { to: '/jobs', label: t('nav.jobs'), icon: icon(Wrench), show: can('jobs.view') },
+        { to: '/service-locations', label: t('nav.serviceLocations'), icon: icon(MapPin), show: can('jobs.view') },
         { to: '/customers', label: t('nav.customers'), icon: icon(Users), show: can('customers.view') },
       ],
     },
