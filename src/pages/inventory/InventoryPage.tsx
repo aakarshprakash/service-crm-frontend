@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, PackagePlus, Pencil, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, PackagePlus, Pencil, Plus, SlidersHorizontal, Trash2, Undo2, UserPlus } from 'lucide-react';
 import { api, ApiError, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hooks';
+import { fieldError, useApiMutation, useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
 import { dateTime, label, money, qty, toMajor, toMinor } from '@/lib/format';
 import type { InventoryItem, Named } from '@/lib/types';
 import { Badge, Button, Card, Checkbox, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, Tabs } from '@/components/ui';
 import { Hint } from '@/components/tutorial';
 
-type Tab = 'items' | 'stock' | 'transactions' | 'suppliers';
+type Tab = 'items' | 'stock' | 'technicians' | 'transactions' | 'suppliers';
 interface Supplier { id: number; name: string; contact: string | null; phone: string | null; email: string | null; gstin: string | null; is_active: boolean }
 
 export default function InventoryPage() {
@@ -23,7 +23,7 @@ export default function InventoryPage() {
   const tabs: { value: Tab; label: string }[] = [
     { value: 'items', label: 'Items' },
     { value: 'stock', label: 'Branch stock' },
-    ...(manage ? ([{ value: 'transactions', label: 'Movements' }, { value: 'suppliers', label: 'Suppliers' }] as const) : []),
+    ...(manage ? ([{ value: 'technicians', label: 'Technician parts' }, { value: 'transactions', label: 'Movements' }, { value: 'suppliers', label: 'Suppliers' }] as const) : []),
   ];
 
   return (
@@ -56,6 +56,7 @@ export default function InventoryPage() {
       <Tabs className="mb-4" value={tab} onChange={(v) => setParams({ tab: v })} tabs={tabs} />
       {tab === 'items' && <Items manage={manage} />}
       {tab === 'stock' && <Stock />}
+      {tab === 'technicians' && <TechnicianParts />}
       {tab === 'transactions' && <Transactions />}
       {tab === 'suppliers' && <Suppliers />}
       {dialog === 'stockin' && <StockIn onClose={() => setDialog(null)} />}
@@ -274,7 +275,7 @@ interface TxRow { id: number; type: string; quantity: number; balance_after: num
 function Transactions() {
   const list = useListQuery<TxRow>('inventory-tx', '/inventory/transactions');
   const f = list.filters;
-  const tone: Record<string, 'green' | 'red' | 'blue' | 'amber' | 'slate'> = { stock_in: 'green', stock_out: 'red', transfer_in: 'blue', transfer_out: 'blue', adjustment: 'amber', return: 'slate' };
+  const tone: Record<string, 'green' | 'red' | 'blue' | 'amber' | 'slate'> = { stock_in: 'green', stock_out: 'red', transfer_in: 'blue', transfer_out: 'blue', adjustment: 'amber', return: 'slate', allocated: 'blue', allocation_return: 'blue' };
   return (
     <Card padded={false}>
       <FilterBar>
@@ -305,6 +306,178 @@ function Transactions() {
       />
       <Pagination meta={list.data?.meta} onPage={(p) => list.setFilter('page', String(p))} />
     </Card>
+  );
+}
+
+// ---- Parts allocated to technicians ----------------------------------------
+
+interface TechnicianStockRow { id: number; technician_id: number; item_id: number; branch_id: number; quantity: number; technician?: Named; branch?: Named; item?: InventoryItem }
+interface TechnicianMove { id: number; type: string; quantity: number; balance_after: number; remarks: string | null; created_at: string; technician?: Named; branch?: Named | null; creator?: Named | null; item?: { code: string; name: string; unit_of_measure: string }; job?: { id: number; crm_call_id: string } | null }
+
+const MOVE_LABEL: Record<string, string> = { allocated: 'Allocated', returned: 'Returned', used: 'Used on job', usage_undone: 'Taken off job' };
+
+/** Who is holding which parts, and every allocation, use on a job and return. */
+function TechnicianParts() {
+  const stock = useListQuery<TechnicianStockRow>('technician-stock', '/inventory/technician-stock');
+  const technicians = useStaffOptions('technician');
+  const technicianId = stock.filters.technician_id;
+  // The URL holds one list's filters and page, so the history keeps its own page.
+  const [movesPage, setMovesPage] = useState(1);
+  const moves = useQuery({
+    queryKey: ['technician-moves', technicianId, movesPage],
+    queryFn: () => api.get<Paginated<TechnicianMove>>('/inventory/technician-moves', { technician_id: technicianId, page: movesPage }),
+  });
+  const [allocating, setAllocating] = useState(false);
+  const [returning, setReturning] = useState<TechnicianStockRow | null>(null);
+  const f = stock.filters;
+  const setTechnician = (v: string) => {
+    stock.setFilter('technician_id', v);
+    setMovesPage(1);
+  };
+  return (
+    <div className="space-y-4">
+      <Card padded={false}>
+        <FilterBar>
+          <SearchInput value={f.search ?? ''} onChange={(v) => stock.setFilter('search', v)} placeholder="Code or name" className="sm:w-64" />
+          <Select value={f.technician_id ?? ''} onChange={(e) => setTechnician(e.target.value)} className="sm:w-52" aria-label="Technician">
+            <option value="">All technicians</option>
+            {technicians.data?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+          <Button className="sm:ml-auto" size="sm" icon={<UserPlus className="h-4 w-4" />} onClick={() => setAllocating(true)}>
+            Allocate parts
+          </Button>
+        </FilterBar>
+        <DataTable
+          rows={stock.data?.data}
+          loading={stock.isFetching}
+          empty={<EmptyState title="No parts with technicians" message="Allocate parts from a branch. They leave the branch’s stock and show in the technician’s app, ready to add to a job." />}
+          columns={[
+            { key: 'tech', header: 'Technician', render: (r) => <span className="font-medium text-slate-900">{r.technician?.name}</span> },
+            { key: 'item', header: 'Item', render: (r) => <div><p>{r.item?.name}</p><p className="font-mono text-xs text-slate-500">{r.item?.code}</p></div> },
+            { key: 'qty', header: 'With technician', className: 'tabular-nums', render: (r) => `${qty(r.quantity)} ${r.item?.unit_of_measure}` },
+            { key: 'value', header: 'At selling price', hideOnMobile: true, className: 'text-right tabular-nums', headerClassName: 'text-right', render: (r) => money(Math.round(r.quantity * (r.item?.unit_price ?? 0))) },
+            {
+              key: 'return',
+              header: '',
+              className: 'w-24 text-right',
+              render: (r) => (
+                <Button variant="secondary" size="sm" icon={<Undo2 className="h-4 w-4" />} onClick={() => setReturning(r)}>
+                  Return
+                </Button>
+              ),
+            },
+          ]}
+        />
+        <Pagination meta={stock.data?.meta} onPage={(p) => stock.setFilter('page', String(p))} />
+      </Card>
+      <Card padded={false} title="Allocation history">
+        <DataTable
+          rows={moves.data?.data}
+          loading={moves.isFetching}
+          empty={<EmptyState title="Nothing yet" />}
+          columns={[
+            { key: 'date', header: 'When', render: (m) => dateTime(m.created_at) },
+            { key: 'tech', header: 'Technician', render: (m) => m.technician?.name },
+            { key: 'item', header: 'Item', render: (m) => m.item?.name },
+            { key: 'type', header: 'What', render: (m) => <Badge tone={m.type === 'used' ? 'red' : m.type === 'allocated' ? 'blue' : 'slate'}>{MOVE_LABEL[m.type] ?? label(m.type)}</Badge> },
+            { key: 'qty', header: 'Qty', className: 'tabular-nums', render: (m) => <span className={m.quantity < 0 ? 'text-red-700' : 'text-emerald-700'}>{m.quantity > 0 ? '+' : ''}{qty(m.quantity)} {m.item?.unit_of_measure}</span> },
+            { key: 'bal', header: 'Left', hideOnMobile: true, className: 'tabular-nums', render: (m) => qty(m.balance_after) },
+            { key: 'job', header: 'Job', render: (m) => (m.job ? <Link className="text-brand-700 hover:underline" to={`/jobs/${m.job.id}`}>{m.job.crm_call_id}</Link> : '—') },
+            { key: 'note', header: 'Details', hideOnMobile: true, render: (m) => <span className="text-xs text-slate-500">{[m.branch?.name, m.remarks, m.creator?.name].filter(Boolean).join(' · ') || '—'}</span> },
+          ]}
+        />
+        <Pagination meta={moves.data?.meta} onPage={setMovesPage} />
+      </Card>
+      {allocating && <AllocateParts onClose={() => setAllocating(false)} />}
+      {returning && <ReturnParts row={returning} onClose={() => setReturning(null)} />}
+    </div>
+  );
+}
+
+const TECHNICIAN_STOCK_KEYS = [['technician-stock'], ['technician-moves'], ['inventory-stock'], ['inventory-tx'], ['inventory-items']];
+
+function AllocateParts({ onClose }: { onClose: () => void }) {
+  const { data: lookups } = useLookups();
+  const technicians = useStaffOptions('technician');
+  const [item, setItem] = useState<InventoryItem | null>(null);
+  const [form, setForm] = useState({ technician_id: '', branch_id: '', quantity: '', remarks: '' });
+  const m = useApiMutation(
+    () => api.post('/inventory/technician-stock/allocate', { ...form, branch_id: form.branch_id || lookups?.branches[0]?.id, item_id: item?.id, remarks: form.remarks || null }),
+    { invalidate: TECHNICIAN_STOCK_KEYS, toastValidation: false, onSuccess: onClose },
+  );
+  const e = (n: string) => fieldError(m.error, n);
+  return (
+    <Modal open onClose={onClose} title="Allocate parts to a technician" description="The parts leave the branch’s stock now and show in the technician’s app." footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={m.isPending} disabled={!item || !form.technician_id} onClick={() => m.mutate(undefined)}>Allocate</Button></>}>
+      <div className="space-y-4">
+        <Field label="Technician" required error={e('technician_id')}>
+          <Select value={form.technician_id} onChange={(ev) => setForm({ ...form, technician_id: ev.target.value })}>
+            <option value="">Select…</option>
+            {technicians.data?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Item" required error={e('item_id')}>
+          <ItemPicker value={item} onChange={setItem} />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="From branch" required error={e('branch_id')}>
+            <Select value={form.branch_id} onChange={(ev) => setForm({ ...form, branch_id: ev.target.value })}>
+              {lookups?.branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={`Quantity ${item ? `(${item.unit_of_measure})` : ''}`} required error={e('quantity')}>
+            <Input inputMode="decimal" value={form.quantity} onChange={(ev) => setForm({ ...form, quantity: ev.target.value.replace(/[^\d.]/g, '') })} />
+          </Field>
+        </div>
+        <Field label="Remarks" error={e('remarks')}>
+          <Input value={form.remarks} onChange={(ev) => setForm({ ...form, remarks: ev.target.value })} />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function ReturnParts({ row, onClose }: { row: TechnicianStockRow; onClose: () => void }) {
+  const { data: lookups } = useLookups();
+  const [form, setForm] = useState({ branch_id: String(row.branch_id), quantity: String(row.quantity), remarks: '' });
+  const m = useApiMutation(
+    () => api.post('/inventory/technician-stock/return', { ...form, technician_id: row.technician_id, item_id: row.item_id, remarks: form.remarks || null }),
+    { invalidate: TECHNICIAN_STOCK_KEYS, toastValidation: false, onSuccess: onClose },
+  );
+  const e = (n: string) => fieldError(m.error, n);
+  return (
+    <Modal open onClose={onClose} title={`Return ${row.item?.name ?? 'parts'}`} description={`${row.technician?.name} has ${qty(row.quantity)} ${row.item?.unit_of_measure}. What’s returned rejoins the branch’s stock.`} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={m.isPending} onClick={() => m.mutate(undefined)}>Return to branch</Button></>}>
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="To branch" required error={e('branch_id')}>
+            <Select value={form.branch_id} onChange={(ev) => setForm({ ...form, branch_id: ev.target.value })}>
+              {lookups?.branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={`Quantity (${row.item?.unit_of_measure})`} required error={e('quantity')}>
+            <Input inputMode="decimal" value={form.quantity} onChange={(ev) => setForm({ ...form, quantity: ev.target.value.replace(/[^\d.]/g, '') })} />
+          </Field>
+        </div>
+        <Field label="Remarks" error={e('remarks')}>
+          <Input value={form.remarks} onChange={(ev) => setForm({ ...form, remarks: ev.target.value })} />
+        </Field>
+      </div>
+    </Modal>
   );
 }
 

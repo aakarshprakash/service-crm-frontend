@@ -146,6 +146,7 @@ export interface Usage {
   quantity: number;
   unit_price: number;
   total_price: number;
+  from_technician_stock?: boolean;
   item?: { id: number; code: string; name: string; type: string; unit_of_measure: string };
 }
 
@@ -373,6 +374,10 @@ export interface Lookups {
   leave_types: LeaveType[];
   /** Models typed on earlier units, most recent first. */
   model_suggestions: { model_no: string; brand_id: number | null }[];
+  /** Photo sections on a visit, set by the company under Settings. */
+  photo_types?: { key: string; label: string }[];
+  /** Names of sections since removed, for the photos already taken under them. */
+  photo_labels?: Record<string, string>;
   /** From how many days an unfinished job shows amber, orange ("old") and red. */
   job_age: JobAgeSettings;
   /** Whether staff can choose GST / non-GST on a bill, and what a walk-in bill starts as. */

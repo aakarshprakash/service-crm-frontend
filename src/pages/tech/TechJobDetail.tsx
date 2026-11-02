@@ -304,16 +304,12 @@ function CallTab({ job, visit }: { job: Job; visit: Visit }) {
     complaint_details: job.complaint_details ?? '',
     complaint_type_id: String(job.complaint_type_id ?? ''),
     priority: job.priority,
-    address: job.customer?.address ?? '',
-    city: job.customer?.city ?? '',
-    pincode: job.customer?.pincode ?? '',
-    alt_phone: job.customer?.alt_phone ?? '',
     serial_no: job.customer_product?.serial_no ?? '',
     outdoor_serial_no: job.customer_product?.outdoor_serial_no ?? '',
     model_no: job.customer_product?.model_no ?? '',
     customer_satisfaction_code: job.customer_satisfaction_code ?? '',
   });
-  const m = useApiMutation(() => api.patch(`/visits/${visit.id}`, { ...form, complaint_type_id: form.complaint_type_id || null, alt_phone: form.alt_phone || null, model_no: form.model_no.trim() || null, customer_satisfaction_code: form.customer_satisfaction_code.trim() || null }), {
+  const m = useApiMutation(() => api.patch(`/visits/${visit.id}`, { ...form, model_no: form.model_no.trim() || null, complaint_type_id: form.complaint_type_id || null, customer_satisfaction_code: form.customer_satisfaction_code.trim() || null }), {
     toastValidation: false,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tech-job', String(job.id)] }),
   });
@@ -351,18 +347,6 @@ function CallTab({ job, visit }: { job: Job; visit: Visit }) {
           <Field label={t('job.jobSummary')} className="sm:col-span-2">
             <Textarea rows={2} value={form.complaint_details} onChange={(ev) => setForm({ ...form, complaint_details: ev.target.value })} />
           </Field>
-          <Field label={t('common.address')} className="sm:col-span-2" error={e('address')}>
-            <Textarea rows={2} value={form.address} onChange={(ev) => setForm({ ...form, address: ev.target.value })} />
-          </Field>
-          <Field label={t('common.city')}>
-            <Input value={form.city} onChange={(ev) => setForm({ ...form, city: ev.target.value })} />
-          </Field>
-          <Field label={t('common.pincode')}>
-            <Input value={form.pincode} inputMode="numeric" onChange={(ev) => setForm({ ...form, pincode: ev.target.value })} />
-          </Field>
-          <Field label={t('job.altPhone')} error={e('alt_phone')}>
-            <Input value={form.alt_phone} inputMode="tel" onChange={(ev) => setForm({ ...form, alt_phone: ev.target.value })} />
-          </Field>
           <ModelField label={t('job.model')} value={form.model_no} onChange={(v) => setForm({ ...form, model_no: v })} brandId={String(job.customer_product?.brand_id ?? '')} error={e('model_no')} disabled={!job.customer_product} />
           <Field label={t('job.serialNo')}>
             <Input value={form.serial_no} onChange={(ev) => setForm({ ...form, serial_no: ev.target.value })} disabled={!job.customer_product} />
@@ -383,10 +367,16 @@ function CallTab({ job, visit }: { job: Job; visit: Visit }) {
   );
 }
 
-const IMAGE_TYPES = ['bill', 'serial', 'complaint_part', 'new_part', 'other'] as const;
+/** The original sections, translated unless the company renamed them. */
+const STANDARD_PHOTO_LABELS: Record<string, string> = { bill: 'Bill', serial: 'Serial number', complaint_part: 'Faulty part', new_part: 'New part', other: 'Other' };
 
 function ImagesTab({ visit }: { visit: Visit }) {
   const { t } = useTranslation();
+  const { data: lookups } = useLookups();
+  const configured = lookups?.photo_types ?? Object.entries(STANDARD_PHOTO_LABELS).map(([key, name]) => ({ key, label: name }));
+  // Photos in a section that has since been removed stay visible.
+  const orphans = [...new Set((visit.images ?? []).map((i) => i.type))].filter((type) => type !== 'signature' && !configured.some((s) => s.key === type));
+  const sections = [...configured.map((s) => ({ ...s, removed: false })), ...orphans.map((key) => ({ key, label: lookups?.photo_labels?.[key] ?? label(key), removed: true }))];
   const qc = useQueryClient();
   const [uploading, setUploading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -432,25 +422,27 @@ function ImagesTab({ visit }: { visit: Visit }) {
           e.target.value = '';
         }}
       />
-      {IMAGE_TYPES.map((type) => {
+      {sections.map(({ key: type, label: sectionLabel, removed }) => {
         const imgs = visit.images?.filter((i) => i.type === type) ?? [];
-        const name = t(`job.photo.${type}`);
+        const name = sectionLabel === STANDARD_PHOTO_LABELS[type] ? t(`job.photo.${type}`) : sectionLabel;
         return (
           <Card key={type} padded={false}>
             <div className="flex items-center justify-between px-4 py-3">
               <p className="text-sm font-medium">{name}</p>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Camera className="h-4 w-4" />}
-                loading={uploading === type}
-                onClick={() => {
-                  pendingType.current = type;
-                  input.current?.click();
-                }}
-              >
-                {t('job.addPhoto')}
-              </Button>
+              {!removed && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Camera className="h-4 w-4" />}
+                  loading={uploading === type}
+                  onClick={() => {
+                    pendingType.current = type;
+                    input.current?.click();
+                  }}
+                >
+                  {t('job.addPhoto')}
+                </Button>
+              )}
             </div>
             {!!imgs.length && (
               <div className="grid grid-cols-3 gap-2 px-4 pb-4">
@@ -659,8 +651,10 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
       },
     },
   );
-  const total = toMinor(form.labour_charge) + toMinor(form.spare_charge);
-  const due = total + previousBalance;
+  // A cancellation waits for the office, so nothing is billed or collected on it.
+  const cancelling = form.status === 'cancelled';
+  const total = cancelling ? 0 : toMinor(form.labour_charge) + toMinor(form.spare_charge);
+  const due = cancelling ? 0 : total + previousBalance;
   const collects = ['cash', 'upi', 'cheque', 'bank_transfer'].includes(form.payment_method);
   const collected = form.amount_collected === '' ? due : toMinor(form.amount_collected);
 
@@ -673,10 +667,10 @@ function SummaryTab({ job, visit, onCompleted }: { job: Job; visit: Visit; onCom
         service_summary: form.service_summary,
         customer_satisfaction_code: form.customer_satisfaction_code.trim() || null,
         assisted_staff_id: form.assisted_staff_id ? Number(form.assisted_staff_id) : null,
-        labour_charge: toMinor(form.labour_charge),
-        spare_charge: toMinor(form.spare_charge),
-        payment_method: total > 0 || collected > 0 ? form.payment_method : null,
-        amount_collected: collects ? collected : 0,
+        labour_charge: cancelling ? 0 : toMinor(form.labour_charge),
+        spare_charge: cancelling ? 0 : toMinor(form.spare_charge),
+        payment_method: !cancelling && (total > 0 || collected > 0) ? form.payment_method : null,
+        amount_collected: !cancelling && collects ? collected : 0,
         payment_reference: form.payment_reference || null,
         ...(pos ?? {}),
       });

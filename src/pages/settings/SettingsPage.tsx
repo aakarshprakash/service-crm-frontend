@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Trash2, Upload, Wallet, Wrench,
+  ArrowDown, ArrowUp, Building2, Camera, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Trash2, Upload, Wallet, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GSTIN_PATTERN, PAN_PATTERN } from '@/lib/india';
-import { api, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
+import { api, ApiError, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
 import { date, dateTime, label, money } from '@/lib/format';
@@ -16,7 +16,7 @@ import { UpiQr, upiLink } from '@/components/upi';
 import { Badge, Button, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, QueryState, SearchInput, Select, Tabs, Textarea, Toggle, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 
-type Tab = 'company' | 'invoicing' | 'preferences' | 'master' | 'templates' | 'payments' | 'email' | 'logs' | 'audit';
+type Tab = 'company' | 'invoicing' | 'preferences' | 'photos' | 'master' | 'templates' | 'payments' | 'email' | 'logs' | 'audit';
 
 type BillKind = 'gst' | 'non_gst';
 type NumberType = 'job' | 'invoice' | 'receipt';
@@ -32,6 +32,7 @@ interface SettingsData {
   invoice_templates: string[];
   has_logo: boolean;
   settings: {
+    photo_types?: { key: string; label: string }[];
     gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind };
     bank?: BankDetails;
     numbering: Record<NumberType, NumberRule>;
@@ -70,6 +71,7 @@ const SECTIONS: { group: string; items: { value: Tab; label: string; hint: strin
     group: 'Operations',
     items: [
       { value: 'preferences', label: 'Preferences', hint: 'Jobs, cash, attendance', icon: SlidersHorizontal },
+      { value: 'photos', label: 'Job photos', hint: 'Photo sections in the technician app', icon: Camera },
       { value: 'master', label: 'Master data', hint: 'Brands, types, lists', icon: Database },
       { value: 'templates', label: 'Message templates', hint: 'SMS & WhatsApp text', icon: MessageSquareText },
     ],
@@ -149,6 +151,7 @@ export default function SettingsPage() {
                 {tab === 'company' && <Company data={q.data} />}
                 {tab === 'invoicing' && <Invoicing data={q.data} />}
                 {tab === 'preferences' && <Preferences data={q.data} />}
+                {tab === 'photos' && <PhotoSections data={q.data} />}
                 {tab === 'master' && <MasterData />}
                 {tab === 'templates' && <Templates />}
                 {tab === 'payments' && <Payments data={q.data} />}
@@ -833,6 +836,45 @@ type MasterRow = Named & { is_active: boolean; model_name?: string; brand?: Name
   annual_quota?: number; is_paid?: boolean; date?: string; lat?: number | null; lng?: number | null; geofence_radius?: number | null };
 
 /** Plain-language result of the attendance settings above, for office staff and for technicians. */
+/** What technicians photograph on a visit. Changes reach the app by themselves: no new version to install. */
+function PhotoSections({ data }: { data: SettingsData }) {
+  const saved = data.settings.photo_types ?? [];
+  const [rows, setRows] = useState(saved);
+  useEffect(() => setRows(saved), [data.settings.photo_types]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useApiMutation(() => api.put('/settings/preferences', { photo_types: rows.map((r) => ({ ...r, label: r.label.trim() })) }), { invalidate: [['settings'], ['lookups']], toastValidation: false });
+  const dirty = JSON.stringify(rows) !== JSON.stringify(saved);
+  const error = m.error instanceof ApiError ? Object.values(m.error.errors)[0]?.[0] : undefined;
+  const set = (i: number, name: string) => setRows(rows.map((r, n) => (n === i ? { ...r, label: name } : r)));
+  const move = (i: number, by: number) => {
+    const next = [...rows];
+    const [row] = next.splice(i, 1);
+    next.splice(i + by, 0, row!);
+    setRows(next);
+  };
+  return (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <Card>
+        <FormSection title="Photo sections" hint="Shown on a visit in this order. Technicians see changes in the app within about 10 minutes, with no update to install.">
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={r.key || `new-${i}`} className="flex items-center gap-2">
+                <Input aria-label={`Section ${i + 1} name`} value={r.label} maxLength={40} placeholder="e.g. Gas pressure reading" onChange={(ev) => set(i, ev.target.value)} />
+                <Button variant="ghost" size="sm" aria-label={`Move ${r.label || 'section'} up`} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" aria-label={`Move ${r.label || 'section'} down`} disabled={i === rows.length - 1} onClick={() => move(i, 1)}><ArrowDown className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" aria-label={`Remove ${r.label || 'section'}`} disabled={rows.length === 1} onClick={() => setRows(rows.filter((_, n) => n !== i))}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ))}
+          </div>
+          {error && <p className="mt-3 rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+          <Button className="mt-3" variant="outline" size="sm" icon={<Plus className="h-4 w-4" />} disabled={rows.length >= 20} onClick={() => setRows([...rows, { key: '', label: '' }])}>Add section</Button>
+          <p className="mt-3 text-xs text-slate-500">Removing a section keeps the photos already taken under it.</p>
+        </FormSection>
+      </Card>
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => setRows(saved)} />
+    </div>
+  );
+}
+
 function PunchRules({ attendance, punchBeforeVisit }: { attendance: SettingsData['settings']['attendance']; punchBeforeVisit: boolean }) {
   const mode = attendance?.geofence ?? 'off';
   const where = (applies: boolean) =>

@@ -109,6 +109,8 @@ export default function JobDetail() {
   const deciding = job?.status === 'cancel_requested';
   const lastVisit = job?.visits?.[job.visits.length - 1];
   const photos = job?.images?.filter((i) => i.type !== 'signature') ?? [];
+  const { data: photoLookups } = useLookups();
+  const photoLabel = (type: string) => photoLookups?.photo_types?.find((p) => p.key === type)?.label ?? photoLookups?.photo_labels?.[type] ?? label(type);
   const unit = job?.customer_product;
   const inv = job?.invoice;
   const { print, printing } = usePrintJobCard(job?.id);
@@ -400,7 +402,7 @@ export default function JobDetail() {
                           <ul className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                             {v.inventory_usage.map((u) => (
                               <li key={u.id} className="flex justify-between gap-3 py-0.5">
-                                <span>{u.item?.name} ({u.item?.code}) × {qty(u.quantity)} {u.item?.unit_of_measure}</span>
+                                <span>{u.item?.name} ({u.item?.code}) × {qty(u.quantity)} {u.item?.unit_of_measure}{u.from_technician_stock ? ' · from technician’s parts' : ''}</span>
                                 <span className="tabular-nums">{money(u.total_price)}</span>
                               </li>
                             ))}
@@ -455,8 +457,8 @@ export default function JobDetail() {
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {photos.map((img) => (
                       <a key={img.id} href={img.url} target="_blank" rel="noopener noreferrer" className="group overflow-hidden rounded-lg border border-slate-200">
-                        <img src={img.url} alt={label(img.type)} loading="lazy" className="aspect-square w-full object-cover transition group-hover:scale-105" />
-                        <p className="bg-white px-2 py-1 text-xs text-slate-600">{label(img.type)}</p>
+                        <img src={img.url} alt={photoLabel(img.type)} loading="lazy" className="aspect-square w-full object-cover transition group-hover:scale-105" />
+                        <p className="bg-white px-2 py-1 text-xs text-slate-600">{photoLabel(img.type)}</p>
                       </a>
                     ))}
                   </div>
