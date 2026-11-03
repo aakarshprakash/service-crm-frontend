@@ -12,7 +12,7 @@ import { AdjustDialog, DayPill, hours } from './hrParts';
 
 interface Punch { id: number; type: 'in' | 'out'; lat: number | null; lng: number | null; accuracy: number | null; distance_m: number | null; within_fence: boolean | null; source: string | null; created_at: string }
 interface Row { user: { id: number; name: string; role: string; branch: string | null; punch_status: 'in' | 'out' }; day: AttendanceDay; punches: Punch[] }
-interface Meta { date: string; present: number; on_leave: number; absent: number; on_duty_now: number; outside_fence: number }
+interface Meta { date: string; present: number; on_leave: number; absent: number; on_duty_now: number; outside_fence: number; late?: number }
 
 /** Who's in today: every active staff member's status, punch times and where they punched from. */
 export default function HrToday() {
@@ -33,8 +33,9 @@ export default function HrToday() {
   return (
     <>
       <PageHeader title="Attendance today" description={`Staff status for ${date(day)}, from punches, approved leave and holidays.`} />
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <StatCard label="Present" value={meta?.present ?? '–'} tone="green" />
+        <StatCard label="Late" value={meta?.late ?? '–'} tone={meta?.late ? 'amber' : 'slate'} />
         <StatCard label="On duty now" value={meta?.on_duty_now ?? '–'} tone="blue" />
         <StatCard label="On leave" value={meta?.on_leave ?? '–'} tone="violet" />
         <StatCard label="Absent" value={meta?.absent ?? '–'} tone={meta?.absent ? 'red' : 'slate'} />
@@ -93,9 +94,51 @@ export default function HrToday() {
                 </div>
               ),
             },
-            { key: 'in', header: 'In', render: (r) => r.day.in ?? '—' },
-            { key: 'out', header: 'Out', render: (r) => r.day.out ?? '—' },
-            { key: 'h', header: 'Hours', hideOnMobile: true, render: (r) => hours(r.day.minutes) },
+            {
+              key: 'shift',
+              header: 'Shift',
+              hideOnMobile: true,
+              render: (r) =>
+                r.day.shift ? (
+                  <div>
+                    <p className="text-sm text-slate-800">{r.day.shift.name}</p>
+                    <p className="whitespace-nowrap text-xs text-slate-500">{r.day.shift.start}–{r.day.shift.end}</p>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400">—</span>
+                ),
+            },
+            {
+              key: 'in',
+              header: 'In',
+              render: (r) => (
+                <div className="space-y-0.5">
+                  <p>{r.day.in ?? '—'}</p>
+                  {!!r.day.late_minutes && <Badge tone="amber">{hours(r.day.late_minutes)} late</Badge>}
+                </div>
+              ),
+            },
+            {
+              key: 'out',
+              header: 'Out',
+              render: (r) => (
+                <div className="space-y-0.5">
+                  <p>{r.day.out ?? '—'}</p>
+                  {!!r.day.early_minutes && <Badge tone="amber">{hours(r.day.early_minutes)} early</Badge>}
+                </div>
+              ),
+            },
+            {
+              key: 'h',
+              header: 'Hours',
+              hideOnMobile: true,
+              render: (r) => (
+                <div className="space-y-0.5">
+                  <p>{hours(r.day.minutes)}</p>
+                  {!!r.day.extra_minutes && <p className="text-xs text-emerald-700">+{hours(r.day.extra_minutes)} extra</p>}
+                </div>
+              ),
+            },
             {
               key: 'loc',
               header: 'Punch locations',

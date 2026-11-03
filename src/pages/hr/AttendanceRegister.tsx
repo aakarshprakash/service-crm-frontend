@@ -10,7 +10,7 @@ import { STAFF_ROLES, type AttendanceSummary, type DayStatus } from '@/lib/types
 import { Button, Card, EmptyState, FilterBar, PageHeader, QueryState, Select } from '@/components/ui';
 import { AdjustDialog, STATUS_STYLE, hours, monthName, num, thisMonth } from './hrParts';
 
-interface Cell { code: string; status: DayStatus; in: string | null; out: string | null; minutes: number; outside: boolean; adjusted: boolean; note: string | null }
+interface Cell { code: string; status: DayStatus; in: string | null; out: string | null; minutes: number; outside: boolean; adjusted: boolean; note: string | null; late_minutes?: number; early_minutes?: number; extra_minutes?: number }
 interface Register { month: string; dates: string[]; rows: { user: { id: number; name: string; role: string; branch: string | null }; days: Record<string, Cell>; summary: AttendanceSummary }[] }
 
 /** Monthly attendance register: one row per staff member, one column per day. */
@@ -32,7 +32,7 @@ export default function AttendanceRegister() {
     <>
       <PageHeader
         title="Attendance register"
-        description="Click a day to correct it. P present · HD half day · L paid leave · LOP unpaid leave · A absent · H holiday · WO weekly off."
+        description="Click a day to correct it. P present · HD half day · L paid leave · LOP unpaid leave · A absent · H holiday · WO weekly off. A red dot means late or left early."
         actions={
           <Link to="/reports?report=attendance">
             <Button variant="secondary" icon={<FileBarChart className="h-4 w-4" />}>
@@ -78,7 +78,7 @@ export default function AttendanceRegister() {
                         </th>
                       );
                     })}
-                    {['P', 'L', 'LOP', 'A', 'Hours'].map((h) => (
+                    {['P', 'L', 'LOP', 'A', 'Late', 'Hours'].map((h) => (
                       <th key={h} className="border-b border-l border-slate-200 px-2 py-2 text-right font-semibold text-slate-600">
                         {h}
                       </th>
@@ -95,7 +95,7 @@ export default function AttendanceRegister() {
                       {r.dates.map((d) => {
                         const c = row.days[d]!;
                         const style = STATUS_STYLE[c.status];
-                        const tip = [style.label, c.in && `In ${c.in}`, c.out && `Out ${c.out}`, c.minutes ? hours(c.minutes) : null, c.outside && 'Punched outside geofence', c.note, c.adjusted && '(manual)'].filter(Boolean).join(' · ');
+                        const tip = [style.label, c.in && `In ${c.in}`, c.out && `Out ${c.out}`, c.minutes ? hours(c.minutes) : null, c.late_minutes ? `${hours(c.late_minutes)} late` : null, c.early_minutes ? `Left ${hours(c.early_minutes)} early` : null, c.extra_minutes ? `${hours(c.extra_minutes)} extra` : null, c.outside && 'Punched outside geofence', c.note, c.adjusted && '(manual)'].filter(Boolean).join(' · ');
                         const editable = can('hr.manage') && c.status !== 'future' && c.status !== 'not_joined';
                         return (
                           <td key={d} className="border-b border-slate-100 p-0.5 text-center">
@@ -108,6 +108,7 @@ export default function AttendanceRegister() {
                             >
                               {c.code}
                               {c.outside && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                              {(!!c.late_minutes || !!c.early_minutes) && <span className="absolute left-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
                             </button>
                           </td>
                         );
@@ -116,6 +117,7 @@ export default function AttendanceRegister() {
                       <td className="border-b border-slate-100 px-2 text-right tabular-nums">{num(row.summary.paid_leave)}</td>
                       <td className="border-b border-slate-100 px-2 text-right tabular-nums">{num(row.summary.unpaid_leave)}</td>
                       <td className={cn('border-b border-slate-100 px-2 text-right tabular-nums', row.summary.absent > 0 && 'text-red-700')}>{num(row.summary.absent)}</td>
+                      <td className={cn('border-b border-slate-100 px-2 text-right tabular-nums', !!row.summary.late_days && 'text-amber-700')}>{row.summary.late_days ?? 0}</td>
                       <td className="border-b border-slate-100 px-2 text-right tabular-nums text-slate-600">{hours(row.summary.minutes)}</td>
                     </tr>
                   ))}

@@ -374,6 +374,8 @@ export interface Lookups {
   leave_types: LeaveType[];
   /** Models typed on earlier units, most recent first. */
   model_suggestions: { model_no: string; brand_id: number | null }[];
+  /** Working hours staff can be put on. */
+  shifts?: { id: number; name: string; start_time: string; end_time: string; grace_minutes: number; is_default: boolean }[];
   /** Photo sections on a visit, set by the company under Settings. */
   photo_types?: { key: string; label: string }[];
   /** Names of sections since removed, for the photos already taken under them. */
@@ -447,6 +449,10 @@ export interface AttendanceDay {
   holiday?: string | null;
   adjusted: boolean;
   note?: string | null;
+  late_minutes?: number;
+  early_minutes?: number;
+  extra_minutes?: number;
+  shift?: { name: string; start: string; end: string } | null;
 }
 
 export interface AttendanceSummary {
@@ -459,6 +465,11 @@ export interface AttendanceSummary {
   weekly_offs: number;
   not_joined: number;
   minutes: number;
+  late_days?: number;
+  late_minutes?: number;
+  early_days?: number;
+  early_minutes?: number;
+  extra_minutes?: number;
 }
 
 export interface SalaryComponent {
@@ -478,6 +489,7 @@ export interface EmployeeProfile {
   monthly_salary: number;
   components: SalaryComponent[] | null;
   weekly_offs: number[] | null;
+  shift_id?: number | null;
   bank_name: string | null;
   bank_account: string | null;
   ifsc: string | null;

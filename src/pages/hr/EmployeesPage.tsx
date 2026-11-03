@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
-import { fieldError, useApiMutation, useListQuery } from '@/lib/hooks';
+import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hooks';
 import { date, money, toMajor, toMinor } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { STAFF_ROLES, type EmployeeProfile, type LeaveBalance, type Role } from '@/lib/types';
@@ -92,7 +92,9 @@ export default function EmployeesPage() {
 
 function EmployeeDialog({ employee, onClose }: { employee: Employee; onClose: () => void }) {
   const p = employee.profile;
+  const { data: lookups } = useLookups();
   const [form, setForm] = useState({
+    shift_id: String(p?.shift_id ?? ''),
     employee_code: p?.employee_code ?? '',
     designation: p?.designation ?? '',
     department: p?.department ?? '',
@@ -158,6 +160,16 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee; onClose: ()
           {text('department', 'Department', { maxLength: 100 })}
           {text('date_of_joining', 'Date of joining', { type: 'date' })}
           {text('date_of_leaving', 'Last working day', { type: 'date' })}
+          <Field label="Shift" error={e('shift_id')} hint="Used to spot late arrival, early leaving and extra time.">
+            <Select value={form.shift_id} onChange={(ev) => set('shift_id', ev.target.value)}>
+              <option value="">{lookups?.shifts?.some((s) => s.is_default) ? 'Company default' : 'No shift'}</option>
+              {lookups?.shifts?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.start_time}–{s.end_time})
+                </option>
+              ))}
+            </Select>
+          </Field>
           <Field label="Weekly off">
             <div className="flex flex-wrap gap-1">
               {WEEKDAYS.map(([d, l]) => {

@@ -827,11 +827,12 @@ const MASTER_TYPES = [
   { key: 'service-locations', label: 'Service locations', hint: 'Areas you serve. Link technicians to each one so new jobs there can be auto-assigned.' },
   { key: 'expense-categories', label: 'Expense categories', hint: 'Heads for recording expenses, e.g. Fuel, Rent, Salaries.' },
   { key: 'upi-accounts', label: 'UPI accounts', hint: 'UPI IDs you collect into. They are printed as a “scan to pay” QR on invoices and shown to technicians when collecting.' },
+  { key: 'shifts', label: 'Shifts', hint: 'Working hours. Set a company default, and give staff their own under HR → Employees. Used to flag late arrival, early leaving and extra time; pay is not affected.' },
   { key: 'leave-types', label: 'Leave types', hint: 'Types of leave staff can apply for, with a yearly quota (0 = not tracked). Unpaid leave is deducted in payroll.' },
   { key: 'holidays', label: 'Holidays', hint: 'Company holidays. They are paid days off and not counted against leave.' },
 ] as const;
 
-type MasterRow = Named & { is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null; pincodes?: string | null; technicians?: Named[]; technicians_count?: number;
+type MasterRow = Named & { start_time?: string; end_time?: string; grace_minutes?: number; is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null; pincodes?: string | null; technicians?: Named[]; technicians_count?: number;
   vpa?: string; payee_name?: string; is_default?: boolean; branch_id?: number | null; branch?: Named | null;
   annual_quota?: number; is_paid?: boolean; date?: string; lat?: number | null; lng?: number | null; geofence_radius?: number | null };
 
@@ -963,6 +964,13 @@ function MasterData() {
                   { key: 'paid', header: 'Pay', render: (r: MasterRow) => <Badge tone={r.is_paid ? 'green' : 'amber'}>{r.is_paid ? 'Paid' : 'Unpaid'}</Badge> },
                 ]
               : []),
+            ...(type === 'shifts'
+              ? [
+                  { key: 'hours', header: 'Hours', render: (r: MasterRow) => <span className="tabular-nums">{r.start_time}–{r.end_time}</span> },
+                  { key: 'grace', header: 'Grace', render: (r: MasterRow) => `${r.grace_minutes ?? 0} min` },
+                  { key: 'def', header: '', render: (r: MasterRow) => (r.is_default ? <Badge tone="blue">Default</Badge> : null) },
+                ]
+              : []),
             ...(type === 'holidays' ? [{ key: 'date', header: 'Date', render: (r: MasterRow) => date(r.date) }] : []),
             ...(type === 'service-locations'
               ? [
@@ -1027,6 +1035,9 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
     payee_name: row?.payee_name ?? '',
     branch_id: String(row?.branch_id ?? ''),
     is_default: row?.is_default ?? false,
+    start_time: row?.start_time ?? '09:00',
+    end_time: row?.end_time ?? '18:00',
+    grace_minutes: String(row?.grace_minutes ?? 10),
     annual_quota: String(row?.annual_quota ?? ''),
     is_paid: row?.is_paid ?? true,
     date: row?.date ?? '',
@@ -1064,6 +1075,7 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
     if (type === 'upi-accounts') Object.assign(base, { vpa: String(form.vpa).trim(), payee_name: form.payee_name, branch_id: form.branch_id || null, is_default: form.is_default });
     if (type === 'leave-types') Object.assign(base, { code: form.code || null, annual_quota: form.annual_quota === '' ? 0 : Number(form.annual_quota), is_paid: form.is_paid });
     if (type === 'holidays') base.date = form.date;
+    if (type === 'shifts') Object.assign(base, { start_time: form.start_time, end_time: form.end_time, grace_minutes: form.grace_minutes === '' ? 0 : Number(form.grace_minutes), is_default: form.is_default });
     if (type === 'service-locations') Object.assign(base, { code: form.code || null, city: form.city || null, pincodes: form.pincodes || null, technician_ids: techIds });
     return base;
   };
@@ -1173,6 +1185,22 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
               <Checkbox label="Paid leave" description="Unpaid leave is deducted from salary as loss of pay." checked={Boolean(form.is_paid)} onChange={(v) => setForm({ ...form, is_paid: v })} />
             </div>
           </div>
+        )}
+        {type === 'shifts' && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Starts" required error={e('start_time')}>
+                <Input type="time" value={String(form.start_time)} onChange={(ev) => setForm({ ...form, start_time: ev.target.value })} />
+              </Field>
+              <Field label="Ends" required error={e('end_time')} hint="Same day. Overnight shifts aren't supported yet.">
+                <Input type="time" value={String(form.end_time)} onChange={(ev) => setForm({ ...form, end_time: ev.target.value })} />
+              </Field>
+              <Field label="Grace (minutes)" error={e('grace_minutes')} hint="Arriving within this isn't late.">
+                <Input inputMode="numeric" value={String(form.grace_minutes)} onChange={(ev) => setForm({ ...form, grace_minutes: ev.target.value.replace(/\D/g, '') })} />
+              </Field>
+            </div>
+            <Checkbox label="Company default" description="Applies to everyone without their own shift." checked={Boolean(form.is_default)} onChange={(v) => setForm({ ...form, is_default: v })} />
+          </>
         )}
         {type === 'holidays' && (
           <Field label="Date" required error={e('date')}>
