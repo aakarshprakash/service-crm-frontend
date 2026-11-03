@@ -83,7 +83,7 @@ export default function InvoicesPage() {
               render: (i) => (
                 <div>
                   <p className="font-medium text-slate-900">{i.invoice_number}</p>
-                  <p className="text-xs text-slate-500">{date(i.generated_at)}</p>
+                  <p className="text-xs text-slate-500">{date(i.generated_at)} · {i.is_gst ? 'GST' : 'Non-GST'}</p>
                 </div>
               ),
             },

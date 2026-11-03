@@ -188,7 +188,7 @@ function AddCustomer({ open, onClose, onCreated }: { open: boolean; onClose: () 
   const m = useApiMutation(
     (d: CustomerDraft) => {
       const { product, ...rest } = d;
-      const hasProduct = product.product_id || product.brand_id || product.category_id || product.serial_no;
+      const hasProduct = product.model_no.trim() || product.brand_id || product.category_id || product.serial_no;
       return api.post<Envelope<Customer>>('/customers', { ...rest, branch_id: rest.branch_id || null, products: hasProduct ? [productPayload(product)] : [] });
     },
     {

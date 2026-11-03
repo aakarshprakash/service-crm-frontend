@@ -16,7 +16,7 @@ export const ROLE_SUMMARY: Record<string, string> = {
   service_tracker: 'Call centre: customers and jobs, follow-ups and reports.',
   technician: 'Technician app: own jobs, visits, punch, cash and parts.',
 };
-export type JobStatus = 'open' | 'in_progress' | 'pending' | 'completed' | 'cancelled';
+export type JobStatus = 'open' | 'in_progress' | 'pending' | 'part_pending' | 'cancel_requested' | 'completed' | 'cancelled';
 export type Priority = 'low' | 'medium' | 'high';
 export type PaymentMethod = 'cash' | 'upi' | 'cheque' | 'bank_transfer' | 'credit' | 'online';
 
@@ -85,6 +85,8 @@ export interface CustomerProduct {
   id: number;
   customer_id: number;
   product_id: number | null;
+  /** The model as typed, e.g. by the technician from the unit's label. */
+  model_no?: string | null;
   /** The unit's brand / product type – set even when the exact model isn't known yet. */
   brand_id?: number | null;
   category_id?: number | null;
@@ -105,7 +107,7 @@ export interface CustomerProduct {
 export function unitLabel(p?: CustomerProduct | null): string {
   if (!p) return '';
   const brand = p.product?.brand?.name ?? p.brand?.name;
-  if (p.product) return [brand, p.product.model_name].filter(Boolean).join(' ');
+  if (p.model_no) return [brand, p.model_no].filter(Boolean).join(' ');
   return [brand, p.category?.name].filter(Boolean).join(' · ') || 'Product';
 }
 
@@ -144,6 +146,7 @@ export interface Usage {
   quantity: number;
   unit_price: number;
   total_price: number;
+  from_technician_stock?: boolean;
   item?: { id: number; code: string; name: string; type: string; unit_of_measure: string };
 }
 
@@ -286,9 +289,16 @@ export interface Job {
   complaint_details: string | null;
   /** Formatted details (sanitised HTML) when entered with the editor. */
   complaint_details_html?: string | null;
+  /** Free text, searched from the Jobs list. */
+  product_category?: string | null;
+  /** Collected from the customer, usually by the technician. */
+  customer_satisfaction_code?: string | null;
   priority: Priority;
   call_type: string;
   status: JobStatus;
+  /** Which part a part-pending job is waiting for, and since when. */
+  part_pending_note?: string | null;
+  part_pending_at?: string | null;
   service_type: string | null;
   scheduled_at: string | null;
   assigned_technician_id: number | null;
@@ -296,6 +306,10 @@ export interface Job {
   completed_at: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  /** Set while a technician's cancellation waits for an admin. */
+  cancel_requested_by?: number | null;
+  cancel_requested_at?: string | null;
+  cancel_requester?: Named | null;
   created_at: string;
   call_age_days: number | null;
   customer?: Customer;
@@ -358,6 +372,24 @@ export interface Lookups {
   service_locations: { id: number; name: string; city: string | null; pincodes: string | null }[];
   upi_accounts: UpiAccount[];
   leave_types: LeaveType[];
+  /** Models typed on earlier units, most recent first. */
+  model_suggestions: { model_no: string; brand_id: number | null }[];
+  /** Working hours staff can be put on. */
+  shifts?: { id: number; name: string; start_time: string; end_time: string; grace_minutes: number; is_default: boolean }[];
+  /** Photo sections on a visit, set by the company under Settings. */
+  photo_types?: { key: string; label: string }[];
+  /** Names of sections since removed, for the photos already taken under them. */
+  photo_labels?: Record<string, string>;
+  /** From how many days an unfinished job shows amber, orange ("old") and red. */
+  job_age: JobAgeSettings;
+  /** Whether staff can choose GST / non-GST on a bill, and what a walk-in bill starts as. */
+  billing: { gst_registered: boolean; walkin_bills: 'gst' | 'non_gst' };
+}
+
+export interface JobAgeSettings {
+  warning: number;
+  old: number;
+  critical: number;
 }
 
 export interface UpiAccount {
@@ -417,6 +449,10 @@ export interface AttendanceDay {
   holiday?: string | null;
   adjusted: boolean;
   note?: string | null;
+  late_minutes?: number;
+  early_minutes?: number;
+  extra_minutes?: number;
+  shift?: { name: string; start: string; end: string } | null;
 }
 
 export interface AttendanceSummary {
@@ -429,6 +465,11 @@ export interface AttendanceSummary {
   weekly_offs: number;
   not_joined: number;
   minutes: number;
+  late_days?: number;
+  late_minutes?: number;
+  early_days?: number;
+  early_minutes?: number;
+  extra_minutes?: number;
 }
 
 export interface SalaryComponent {
@@ -448,6 +489,7 @@ export interface EmployeeProfile {
   monthly_salary: number;
   components: SalaryComponent[] | null;
   weekly_offs: number[] | null;
+  shift_id?: number | null;
   bank_name: string | null;
   bank_account: string | null;
   ifsc: string | null;

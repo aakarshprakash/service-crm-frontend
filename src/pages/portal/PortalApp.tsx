@@ -84,7 +84,7 @@ interface Overview { customer: { name: string; phone: string; address: string | 
 
 function PortalHome({ base }: { base: string }) {
   const q = useQuery({ queryKey: ['portal-overview'], queryFn: () => api.get<Envelope<Overview>>('/customer/overview').then((r) => r.data) });
-  const jobs = useQuery({ queryKey: ['portal-jobs', 'open'], queryFn: () => api.get<Paginated<PortalJob>>('/customer/jobs', { status: 'open,in_progress,pending' }) });
+  const jobs = useQuery({ queryKey: ['portal-jobs', 'open'], queryFn: () => api.get<Paginated<PortalJob>>('/customer/jobs', { status: 'open,in_progress,pending,part_pending,cancel_requested' }) });
   const d = q.data;
   return (
     <QueryState loading={q.isLoading} error={q.error}>
@@ -114,7 +114,7 @@ function PortalHome({ base }: { base: string }) {
               <ul className="divide-y divide-slate-100">
                 {d.products.map((p) => (
                   <li key={p.id} className="px-5 py-3 text-sm">
-                    <p className="font-medium">{[p.product?.brand?.name, p.product?.model_name].filter(Boolean).join(' ') || 'Product'}</p>
+                    <p className="font-medium">{[p.product?.brand?.name ?? p.brand?.name, p.model_no].filter(Boolean).join(' ') || 'Product'}</p>
                     <p className="text-xs text-slate-500">SN {p.serial_no ?? '—'} · Warranty till {date(p.warranty_expiry)}</p>
                   </li>
                 ))}
@@ -182,7 +182,7 @@ function RequestDetail({ base }: { base: string }) {
   const q = useQuery({ queryKey: ['portal-job', id], queryFn: () => api.get<Envelope<JobView>>(`/customer/jobs/${id}`).then((r) => r.data), refetchInterval: 30_000 });
   const j = q.data;
   const steps = ['open', 'in_progress', 'completed'];
-  const reached = j ? (j.status === 'pending' ? 1 : steps.indexOf(j.status)) : -1;
+  const reached = j ? (j.status === 'pending' || j.status === 'part_pending' ? 1 : steps.indexOf(j.status)) : -1;
   return (
     <QueryState loading={q.isLoading} error={q.error}>
       {j && (
@@ -209,7 +209,8 @@ function RequestDetail({ base }: { base: string }) {
                   </li>
                 ))}
               </ol>
-              {j.status === 'pending' && <p className="mt-3 text-center text-sm text-amber-800">Waiting for a part or a follow-up visit.</p>}
+              {j.status === 'pending' && <p className="mt-3 text-center text-sm text-amber-800">Waiting for a follow-up visit.</p>}
+              {j.status === 'part_pending' && <p className="mt-3 text-center text-sm text-amber-800">Waiting for a spare part. We’ll visit once it arrives.</p>}
             </Card>
           )}
           <Card>
@@ -368,7 +369,7 @@ function NewRequest({ base }: { base: string }) {
               <option value="">Select product</option>
               {overview.data?.products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {[p.product?.brand?.name, p.product?.model_name].filter(Boolean).join(' ') || 'Product'} {p.serial_no && `· SN ${p.serial_no}`}
+                  {[p.product?.brand?.name ?? p.brand?.name, p.model_no].filter(Boolean).join(' ') || 'Product'} {p.serial_no && `· SN ${p.serial_no}`}
                 </option>
               ))}
             </Select>

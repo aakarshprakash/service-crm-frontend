@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Trash2, Upload, Wallet, Wrench,
+  ArrowDown, ArrowUp, Building2, Camera, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Trash2, Upload, Wallet, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GSTIN_PATTERN, PAN_PATTERN } from '@/lib/india';
-import { api, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
+import { api, ApiError, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
 import { date, dateTime, label, money } from '@/lib/format';
@@ -16,7 +16,12 @@ import { UpiQr, upiLink } from '@/components/upi';
 import { Badge, Button, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, QueryState, SearchInput, Select, Tabs, Textarea, Toggle, toast } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 
-type Tab = 'company' | 'invoicing' | 'preferences' | 'master' | 'templates' | 'payments' | 'email' | 'logs' | 'audit';
+type Tab = 'company' | 'invoicing' | 'preferences' | 'photos' | 'master' | 'templates' | 'payments' | 'email' | 'logs' | 'audit';
+
+type BillKind = 'gst' | 'non_gst';
+type NumberType = 'job' | 'invoice' | 'receipt';
+interface NumberRule { date: string; ending: 'counter' | 'random'; digits: number; separator: 'dash' | 'none' }
+interface BankDetails { account_name: string | null; bank_name: string | null; account_no: string | null; ifsc: string | null; branch: string | null }
 
 interface SettingsData {
   company: {
@@ -27,7 +32,10 @@ interface SettingsData {
   invoice_templates: string[];
   has_logo: boolean;
   settings: {
-    gst: { service_sac: string; service_rate: number; part_rate: number };
+    photo_types?: { key: string; label: string }[];
+    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind };
+    bank?: BankDetails;
+    numbering: Record<NumberType, NumberRule>;
     invoice_template: string;
     invoice_prefix: string;
     job_prefix: string;
@@ -40,7 +48,7 @@ interface SettingsData {
     auto_assign_max_jobs: number;
     auto_assign_on_duty_only: boolean;
     attendance: { geofence: 'off' | 'flag' | 'enforce'; geofence_technicians: boolean; require_location: boolean };
-    jobs?: { require_signature: boolean; require_punch_in?: boolean };
+    jobs?: { require_signature: boolean; require_punch_in?: boolean; age_warning?: number; age_old?: number; age_critical?: number };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -63,6 +71,7 @@ const SECTIONS: { group: string; items: { value: Tab; label: string; hint: strin
     group: 'Operations',
     items: [
       { value: 'preferences', label: 'Preferences', hint: 'Jobs, cash, attendance', icon: SlidersHorizontal },
+      { value: 'photos', label: 'Job photos', hint: 'Photo sections in the technician app', icon: Camera },
       { value: 'master', label: 'Master data', hint: 'Brands, types, lists', icon: Database },
       { value: 'templates', label: 'Message templates', hint: 'SMS & WhatsApp text', icon: MessageSquareText },
     ],
@@ -142,6 +151,7 @@ export default function SettingsPage() {
                 {tab === 'company' && <Company data={q.data} />}
                 {tab === 'invoicing' && <Invoicing data={q.data} />}
                 {tab === 'preferences' && <Preferences data={q.data} />}
+                {tab === 'photos' && <PhotoSections data={q.data} />}
                 {tab === 'master' && <MasterData />}
                 {tab === 'templates' && <Templates />}
                 {tab === 'payments' && <Payments data={q.data} />}
@@ -321,7 +331,7 @@ function Company({ data }: { data: SettingsData }) {
 const TEMPLATE_INFO: Record<string, { name: string; text: string; swatch: ReactNode }> = {
   classic: {
     name: 'Classic',
-    text: 'Formal bordered tax invoice – the layout auditors and B2B customers expect.',
+    text: 'Classic bordered bill: Bill To and Ship To, HSN, UOM, tax by rate, bank details and signatures.',
     swatch: (
       <div className="space-y-1 rounded border-2 border-slate-800 bg-white p-2">
         <div className="mx-auto h-1.5 w-1/2 rounded bg-slate-800" />
@@ -350,15 +360,18 @@ function Invoicing({ data }: { data: SettingsData }) {
   const { refresh } = useAuth();
   const [gst, setGst] = useState(data.settings.gst);
   const [template, setTemplate] = useState(data.settings.invoice_template);
+  const emptyBank: BankDetails = { account_name: '', bank_name: '', account_no: '', ifsc: '', branch: '' };
+  const savedBank = { ...emptyBank, ...Object.fromEntries(Object.entries(data.settings.bank ?? {}).map(([k, v]) => [k, v ?? ''])) } as BankDetails;
+  const [bank, setBank] = useState<BankDetails>(savedBank);
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, invoice_template: template }), {
-    invalidate: [['settings']],
+  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, bank, invoice_template: template }), {
+    invalidate: [['settings'], ['lookups']],
     toastValidation: false,
     onSuccess: () => refresh(),
   });
   const e = (n: string) => fieldError(m.error, n);
   const registered = !!data.company.gstin;
-  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template;
+  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template || JSON.stringify(bank) !== JSON.stringify(savedBank);
 
   const preview = async (t: string) => {
     setPreviewing(t);
@@ -386,6 +399,24 @@ function Invoicing({ data }: { data: SettingsData }) {
         )}
       </div>
 
+      <Card title="GST or non-GST bills">
+        <p className="mb-4 text-sm text-slate-500">Choose how each kind of bill starts. Prices include GST, so the customer pays the same either way: a GST bill also shows the tax, and a non-GST bill doesn’t.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Bills from technician visits" hint="An admin or accountant can still change a single bill on its invoice page.">
+            <Select value={gst.job_bills ?? 'gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, job_bills: ev.target.value as BillKind })}>
+              <option value="gst">GST bill</option>
+              <option value="non_gst">Non-GST bill</option>
+            </Select>
+          </Field>
+          <Field label="Walk-in bills" hint="Whoever makes the bill can choose either one on the bill.">
+            <Select value={gst.walkin_bills ?? 'gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, walkin_bills: ev.target.value as BillKind })}>
+              <option value="gst">GST bill</option>
+              <option value="non_gst">Non-GST bill</option>
+            </Select>
+          </Field>
+        </div>
+      </Card>
+
       <Card title="GST rates">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Service SAC code" error={e('gst.service_sac')} hint="998719 = repair & maintenance of other goods.">
@@ -407,6 +438,26 @@ function Invoicing({ data }: { data: SettingsData }) {
           </Field>
         </div>
         <p className="mt-4 text-xs text-slate-500">Changes apply to new invoices. Invoices already issued keep the tax they were issued with.</p>
+      </Card>
+
+      <Card title="Bank details on invoices">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Account holder’s name" error={e('bank.account_name')}>
+            <Input value={bank.account_name ?? ''} maxLength={150} onChange={(ev) => setBank({ ...bank, account_name: ev.target.value })} />
+          </Field>
+          <Field label="Bank" error={e('bank.bank_name')}>
+            <Input value={bank.bank_name ?? ''} maxLength={100} onChange={(ev) => setBank({ ...bank, bank_name: ev.target.value })} placeholder="e.g. HDFC" />
+          </Field>
+          <Field label="Account number" error={e('bank.account_no')}>
+            <Input value={bank.account_no ?? ''} maxLength={40} inputMode="numeric" onChange={(ev) => setBank({ ...bank, account_no: ev.target.value })} />
+          </Field>
+          <Field label="IFSC" error={e('bank.ifsc')}>
+            <Input value={bank.ifsc ?? ''} maxLength={20} onChange={(ev) => setBank({ ...bank, ifsc: ev.target.value.toUpperCase() })} />
+          </Field>
+          <Field label="Branch" error={e('bank.branch')} className="sm:col-span-2">
+            <Input value={bank.branch ?? ''} maxLength={100} onChange={(ev) => setBank({ ...bank, branch: ev.target.value })} />
+          </Field>
+        </div>
       </Card>
 
       <Card title="Invoice design">
@@ -451,7 +502,7 @@ function Invoicing({ data }: { data: SettingsData }) {
           })}
         </div>
       </Card>
-      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setGst(data.settings.gst); setTemplate(data.settings.invoice_template); }} />
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setBank(savedBank); setGst(data.settings.gst); setTemplate(data.settings.invoice_template); }} />
     </div>
   );
 }
@@ -509,11 +560,91 @@ function SettingGroup({ icon, title, desc, children }: { icon: ReactNode; title:
   );
 }
 
+const NUMBER_DATE_OPTIONS: [string, string][] = [
+  ['none', 'No date'],
+  ['yy', 'Year (26)'],
+  ['yyyy', 'Year (2026)'],
+  ['ym', 'Year + month (2611)'],
+  ['yyyymm', 'Year + month (202611)'],
+  ['yymmdd', 'Full date (261102)'],
+  ['yyyymmdd', 'Full date (20261102)'],
+];
+
+/** What the next number will look like. Mirrors DocumentNumber on the server. */
+function numberExample(prefix: string, rule: NumberRule): string {
+  const now = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  const yyyy = String(now.getFullYear());
+  const mm = p(now.getMonth() + 1);
+  const dd = p(now.getDate());
+  const dates: Record<string, string> = { none: '', yy: yyyy.slice(2), yyyy, ym: yyyy.slice(2) + mm, yyyymm: yyyy + mm, yymmdd: yyyy.slice(2) + mm + dd, yyyymmdd: yyyy + mm + dd };
+  const digits = Number(rule.digits) || 0;
+  const ending = rule.ending === 'random' ? '48213760'.slice(0, digits) : '42'.padStart(digits, '0');
+  return [prefix, dates[rule.date], ending].filter(Boolean).join(rule.separator === 'dash' ? '-' : '');
+}
+
+/** One kind of number: its letters, date, ending, and a live example. */
+function NumberingRow({ title, prefix, onPrefix, rule, onRule, allowRandom, errors, note }: {
+  title: string;
+  prefix: string;
+  onPrefix: (v: string) => void;
+  rule: NumberRule;
+  onRule: (r: NumberRule) => void;
+  allowRandom?: boolean;
+  errors: (string | undefined)[];
+  note?: string;
+}) {
+  const example = numberExample(prefix, rule);
+  return (
+    <div className="py-4 first:pt-0">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-slate-900">{title}</p>
+        <p className="text-sm text-slate-500">Next number looks like <span className="font-mono font-semibold text-slate-900">{example}</span></p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1.8fr_1.4fr_0.7fr_1.1fr]">
+        <Field label="Letters">
+          <Input value={prefix} maxLength={10} onChange={(ev) => onPrefix(ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
+        </Field>
+        <Field label="Date">
+          <Select value={rule.date} onChange={(ev) => onRule({ ...rule, date: ev.target.value })} aria-label={`${title}: date`}>
+            {NUMBER_DATE_OPTIONS.map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Ends with">
+          {allowRandom ? (
+            <Select value={rule.ending} onChange={(ev) => onRule({ ...rule, ending: ev.target.value as NumberRule['ending'], digits: ev.target.value === 'random' ? Math.max(4, rule.digits) : rule.digits })} aria-label={`${title}: ending`}>
+              <option value="counter">Running number</option>
+              <option value="random">Random number</option>
+            </Select>
+          ) : (
+            <Input value="Running number" disabled aria-label={`${title}: ending`} />
+          )}
+        </Field>
+        <Field label="Digits">
+          <Input type="number" min={rule.ending === 'random' ? 4 : 3} max={8} value={rule.digits} onChange={(ev) => onRule({ ...rule, digits: Number(ev.target.value) })} />
+        </Field>
+        <Field label="Parts joined with">
+          <Select value={rule.separator} onChange={(ev) => onRule({ ...rule, separator: ev.target.value as NumberRule['separator'] })} aria-label={`${title}: joined with`}>
+            <option value="dash">A dash (-)</option>
+            <option value="none">Nothing</option>
+          </Select>
+        </Field>
+      </div>
+      {note && <p className="mt-2 text-xs text-slate-500">{note}</p>}
+      {errors.filter(Boolean).map((err) => <p key={err} className="mt-1 text-xs text-red-600">{err}</p>)}
+    </div>
+  );
+}
+
 function Preferences({ data }: { data: SettingsData }) {
   const { refresh } = useAuth();
   const [s, setS] = useState(data.settings);
   useEffect(() => setS(data.settings), [data.settings]);
-  const m = useApiMutation(() => api.put('/settings/preferences', s), { invalidate: [['settings']], toastValidation: false, onSuccess: () => refresh() });
+  const m = useApiMutation(() => api.put('/settings/preferences', s), { invalidate: [['settings'], ['lookups'], ['job-quick-counts'], ['location-analysis']], toastValidation: false, onSuccess: () => refresh() });
   const e = (n: string) => fieldError(m.error, n);
   const dirty = JSON.stringify(s) !== JSON.stringify(data.settings);
   const notInPlan = 'Not included in your plan.';
@@ -549,6 +680,30 @@ function Preferences({ data }: { data: SettingsData }) {
             onChange={(ev) => setS({ ...s, auto_assign_max_jobs: Number(ev.target.value) })}
           />
         </div>
+        <div className="py-4">
+          <p className="text-sm font-medium text-slate-900">Job age colours</p>
+          <p className="mt-0.5 text-sm text-slate-500">How many days old an unfinished job must be to show each colour in the Jobs list. Orange and above count as “Old jobs”.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {([
+              ['age_warning', 'Amber from', 3, 'bg-amber-500'],
+              ['age_old', 'Orange from', 7, 'bg-orange-500'],
+              ['age_critical', 'Red from', 14, 'bg-red-500'],
+            ] as const).map(([key, text, fallback, dot]) => (
+              <label key={key} className="block">
+                <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-600"><span className={`h-2.5 w-2.5 rounded-full ${dot}`} />{text} (days)</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  invalid={!!e(`jobs.${key}`)}
+                  value={s.jobs?.[key] ?? fallback}
+                  onChange={(ev) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, [key]: Number(ev.target.value) } })}
+                />
+                {e(`jobs.${key}`) && <span className="mt-1 block text-xs text-red-600">{e(`jobs.${key}`)}</span>}
+              </label>
+            ))}
+          </div>
+        </div>
         <SettingRow
           title="Auto-assign only to technicians on duty"
           desc="Only pick technicians who have punched in today."
@@ -582,18 +737,33 @@ function Preferences({ data }: { data: SettingsData }) {
         <SettingRow title="Close cash day by day" desc="A technician must hand over earlier days’ cash before closing today. Admins can always override." checked={s.strict_cash_close} onChange={(v) => setS({ ...s, strict_cash_close: v })} />
       </SettingGroup>
 
-      <SettingGroup icon={<Hash className="h-4 w-4" />} title="Numbering" desc="The letters at the start of job, invoice and receipt numbers.">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Job numbers" error={e('job_prefix')} hint={`e.g. ${s.job_prefix}-2610-00042`}>
-            <Input value={s.job_prefix} onChange={(ev) => setS({ ...s, job_prefix: ev.target.value.toUpperCase() })} maxLength={10} />
-          </Field>
-          <Field label="Invoice numbers" error={e('invoice_prefix')} hint={`e.g. ${s.invoice_prefix}-2610-00042`}>
-            <Input value={s.invoice_prefix} onChange={(ev) => setS({ ...s, invoice_prefix: ev.target.value.toUpperCase() })} maxLength={10} />
-          </Field>
-          <Field label="Receipt numbers" error={e('receipt_prefix')} hint={`e.g. ${s.receipt_prefix}-2610-00042`}>
-            <Input value={s.receipt_prefix} onChange={(ev) => setS({ ...s, receipt_prefix: ev.target.value.toUpperCase() })} maxLength={10} />
-          </Field>
-        </div>
+      <SettingGroup icon={<Hash className="h-4 w-4" />} title="Numbering" desc="How job, invoice and receipt numbers are made. Changes apply to new numbers; ones already issued stay as they are.">
+        <NumberingRow
+          title="Job numbers"
+          prefix={s.job_prefix}
+          onPrefix={(v) => setS({ ...s, job_prefix: v })}
+          rule={s.numbering.job}
+          onRule={(r) => setS({ ...s, numbering: { ...s.numbering, job: r } })}
+          allowRandom
+          errors={[e('job_prefix'), e('numbering.job.date'), e('numbering.job.ending'), e('numbering.job.digits')]}
+        />
+        <NumberingRow
+          title="Invoice numbers"
+          prefix={s.invoice_prefix}
+          onPrefix={(v) => setS({ ...s, invoice_prefix: v })}
+          rule={s.numbering.invoice}
+          onRule={(r) => setS({ ...s, numbering: { ...s.numbering, invoice: r } })}
+          note="GST rules require tax invoices to run in order, in at most 16 characters, so these always end with a running number."
+          errors={[e('invoice_prefix'), e('numbering.invoice'), e('numbering.invoice.date'), e('numbering.invoice.digits')]}
+        />
+        <NumberingRow
+          title="Receipt numbers"
+          prefix={s.receipt_prefix}
+          onPrefix={(v) => setS({ ...s, receipt_prefix: v })}
+          rule={s.numbering.receipt}
+          onRule={(r) => setS({ ...s, numbering: { ...s.numbering, receipt: r } })}
+          errors={[e('receipt_prefix'), e('numbering.receipt.date'), e('numbering.receipt.digits')]}
+        />
       </SettingGroup>
 
       <SettingGroup icon={<MapPin className="h-4 w-4" />} title="Attendance" desc="Where staff are allowed to punch in. Set each branch’s location in Master data → Branches.">
@@ -657,15 +827,55 @@ const MASTER_TYPES = [
   { key: 'service-locations', label: 'Service locations', hint: 'Areas you serve. Link technicians to each one so new jobs there can be auto-assigned.' },
   { key: 'expense-categories', label: 'Expense categories', hint: 'Heads for recording expenses, e.g. Fuel, Rent, Salaries.' },
   { key: 'upi-accounts', label: 'UPI accounts', hint: 'UPI IDs you collect into. They are printed as a “scan to pay” QR on invoices and shown to technicians when collecting.' },
+  { key: 'shifts', label: 'Shifts', hint: 'Working hours. Set a company default, and give staff their own under HR → Employees. Used to flag late arrival, early leaving and extra time; pay is not affected.' },
   { key: 'leave-types', label: 'Leave types', hint: 'Types of leave staff can apply for, with a yearly quota (0 = not tracked). Unpaid leave is deducted in payroll.' },
   { key: 'holidays', label: 'Holidays', hint: 'Company holidays. They are paid days off and not counted against leave.' },
 ] as const;
 
-type MasterRow = Named & { is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null; pincodes?: string | null; technicians?: Named[]; technicians_count?: number;
+type MasterRow = Named & { start_time?: string; end_time?: string; grace_minutes?: number; is_active: boolean; model_name?: string; brand?: Named | null; category?: Named | null; complaint_type?: Named | null; complaint_type_id?: number | null; brand_id?: number | null; category_id?: number | null; contact?: string | null; phone?: string | null; code?: string | null; city?: string | null; address?: string | null; pincodes?: string | null; technicians?: Named[]; technicians_count?: number;
   vpa?: string; payee_name?: string; is_default?: boolean; branch_id?: number | null; branch?: Named | null;
   annual_quota?: number; is_paid?: boolean; date?: string; lat?: number | null; lng?: number | null; geofence_radius?: number | null };
 
 /** Plain-language result of the attendance settings above, for office staff and for technicians. */
+/** What technicians photograph on a visit. Changes reach the app by themselves: no new version to install. */
+function PhotoSections({ data }: { data: SettingsData }) {
+  const saved = data.settings.photo_types ?? [];
+  const [rows, setRows] = useState(saved);
+  useEffect(() => setRows(saved), [data.settings.photo_types]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useApiMutation(() => api.put('/settings/preferences', { photo_types: rows.map((r) => ({ ...r, label: r.label.trim() })) }), { invalidate: [['settings'], ['lookups']], toastValidation: false });
+  const dirty = JSON.stringify(rows) !== JSON.stringify(saved);
+  const error = m.error instanceof ApiError ? Object.values(m.error.errors)[0]?.[0] : undefined;
+  const set = (i: number, name: string) => setRows(rows.map((r, n) => (n === i ? { ...r, label: name } : r)));
+  const move = (i: number, by: number) => {
+    const next = [...rows];
+    const [row] = next.splice(i, 1);
+    next.splice(i + by, 0, row!);
+    setRows(next);
+  };
+  return (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <Card>
+        <FormSection title="Photo sections" hint="Shown on a visit in this order. Technicians see changes in the app within about 10 minutes, with no update to install.">
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={r.key || `new-${i}`} className="flex items-center gap-2">
+                <Input aria-label={`Section ${i + 1} name`} value={r.label} maxLength={40} placeholder="e.g. Gas pressure reading" onChange={(ev) => set(i, ev.target.value)} />
+                <Button variant="ghost" size="sm" aria-label={`Move ${r.label || 'section'} up`} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" aria-label={`Move ${r.label || 'section'} down`} disabled={i === rows.length - 1} onClick={() => move(i, 1)}><ArrowDown className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" aria-label={`Remove ${r.label || 'section'}`} disabled={rows.length === 1} onClick={() => setRows(rows.filter((_, n) => n !== i))}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ))}
+          </div>
+          {error && <p className="mt-3 rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+          <Button className="mt-3" variant="outline" size="sm" icon={<Plus className="h-4 w-4" />} disabled={rows.length >= 20} onClick={() => setRows([...rows, { key: '', label: '' }])}>Add section</Button>
+          <p className="mt-3 text-xs text-slate-500">Removing a section keeps the photos already taken under it.</p>
+        </FormSection>
+      </Card>
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => setRows(saved)} />
+    </div>
+  );
+}
+
 function PunchRules({ attendance, punchBeforeVisit }: { attendance: SettingsData['settings']['attendance']; punchBeforeVisit: boolean }) {
   const mode = attendance?.geofence ?? 'off';
   const where = (applies: boolean) =>
@@ -754,6 +964,13 @@ function MasterData() {
                   { key: 'paid', header: 'Pay', render: (r: MasterRow) => <Badge tone={r.is_paid ? 'green' : 'amber'}>{r.is_paid ? 'Paid' : 'Unpaid'}</Badge> },
                 ]
               : []),
+            ...(type === 'shifts'
+              ? [
+                  { key: 'hours', header: 'Hours', render: (r: MasterRow) => <span className="tabular-nums">{r.start_time}–{r.end_time}</span> },
+                  { key: 'grace', header: 'Grace', render: (r: MasterRow) => `${r.grace_minutes ?? 0} min` },
+                  { key: 'def', header: '', render: (r: MasterRow) => (r.is_default ? <Badge tone="blue">Default</Badge> : null) },
+                ]
+              : []),
             ...(type === 'holidays' ? [{ key: 'date', header: 'Date', render: (r: MasterRow) => date(r.date) }] : []),
             ...(type === 'service-locations'
               ? [
@@ -818,6 +1035,9 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
     payee_name: row?.payee_name ?? '',
     branch_id: String(row?.branch_id ?? ''),
     is_default: row?.is_default ?? false,
+    start_time: row?.start_time ?? '09:00',
+    end_time: row?.end_time ?? '18:00',
+    grace_minutes: String(row?.grace_minutes ?? 10),
     annual_quota: String(row?.annual_quota ?? ''),
     is_paid: row?.is_paid ?? true,
     date: row?.date ?? '',
@@ -855,6 +1075,7 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
     if (type === 'upi-accounts') Object.assign(base, { vpa: String(form.vpa).trim(), payee_name: form.payee_name, branch_id: form.branch_id || null, is_default: form.is_default });
     if (type === 'leave-types') Object.assign(base, { code: form.code || null, annual_quota: form.annual_quota === '' ? 0 : Number(form.annual_quota), is_paid: form.is_paid });
     if (type === 'holidays') base.date = form.date;
+    if (type === 'shifts') Object.assign(base, { start_time: form.start_time, end_time: form.end_time, grace_minutes: form.grace_minutes === '' ? 0 : Number(form.grace_minutes), is_default: form.is_default });
     if (type === 'service-locations') Object.assign(base, { code: form.code || null, city: form.city || null, pincodes: form.pincodes || null, technician_ids: techIds });
     return base;
   };
@@ -964,6 +1185,22 @@ function MasterDialog({ type, row, onClose }: { type: string; row: MasterRow | n
               <Checkbox label="Paid leave" description="Unpaid leave is deducted from salary as loss of pay." checked={Boolean(form.is_paid)} onChange={(v) => setForm({ ...form, is_paid: v })} />
             </div>
           </div>
+        )}
+        {type === 'shifts' && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Starts" required error={e('start_time')}>
+                <Input type="time" value={String(form.start_time)} onChange={(ev) => setForm({ ...form, start_time: ev.target.value })} />
+              </Field>
+              <Field label="Ends" required error={e('end_time')} hint="Same day. Overnight shifts aren't supported yet.">
+                <Input type="time" value={String(form.end_time)} onChange={(ev) => setForm({ ...form, end_time: ev.target.value })} />
+              </Field>
+              <Field label="Grace (minutes)" error={e('grace_minutes')} hint="Arriving within this isn't late.">
+                <Input inputMode="numeric" value={String(form.grace_minutes)} onChange={(ev) => setForm({ ...form, grace_minutes: ev.target.value.replace(/\D/g, '') })} />
+              </Field>
+            </div>
+            <Checkbox label="Company default" description="Applies to everyone without their own shift." checked={Boolean(form.is_default)} onChange={(v) => setForm({ ...form, is_default: v })} />
+          </>
         )}
         {type === 'holidays' && (
           <Field label="Date" required error={e('date')}>

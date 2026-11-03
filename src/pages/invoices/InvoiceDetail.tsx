@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Copy, Download, HandCoins, QrCode, Send } from 'lucide-react';
+import { ArrowLeft, Copy, Download, HandCoins, QrCode, ReceiptText, Send } from 'lucide-react';
 import { UpiQrDialog } from '@/components/upi';
 import { api, download, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { fieldError, useApiMutation } from '@/lib/hooks';
+import { fieldError, useApiMutation, useLookups } from '@/lib/hooks';
 import { date, dateTime, money, qty, toMajor, toMinor } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 import { Badge, Button, Card, DataTable, Field, Input, Modal, PageHeader, QueryState, Select, Textarea, toast } from '@/components/ui';
@@ -18,6 +18,8 @@ export default function InvoiceDetail() {
   const q = useQuery({ queryKey: ['invoice', id], queryFn: () => api.get<Envelope<Invoice>>(`/invoices/${id}`).then((r) => r.data) });
   const [paying, setPaying] = useState(false);
   const [showUpi, setShowUpi] = useState(false);
+  const [changingType, setChangingType] = useState(false);
+  const { data: lookups } = useLookups();
   const remind = useApiMutation(() => api.post<{ message: string }>(`/invoices/${id}/remind`));
   const inv = q.data;
   const back = user?.role === 'technician' ? `/tech/jobs/${inv?.job_id ?? ''}` : '/invoices';
@@ -35,7 +37,7 @@ export default function InvoiceDetail() {
             }
             title={
               <span className="flex flex-wrap items-center gap-3">
-                {inv.invoice_number} <StatusBadge status={inv.payment_status} /> {inv.is_credit && inv.balance_amount > 0 && <Badge tone="violet">Credit</Badge>}
+                {inv.invoice_number} <StatusBadge status={inv.payment_status} /> <Badge tone={inv.is_gst ? 'blue' : 'slate'}>{inv.is_gst ? 'GST bill' : 'Non-GST bill'}</Badge> {inv.is_credit && inv.balance_amount > 0 && <Badge tone="violet">Credit</Badge>}
               </span>
             }
             description={
@@ -45,6 +47,13 @@ export default function InvoiceDetail() {
             }
             actions={
               <>
+                {can('invoices.change_bill_type') && (inv.is_gst || lookups?.billing.gst_registered) && (
+                  <Hint text="Switches this bill between GST and non-GST. The total stays the same.">
+                    <Button variant="secondary" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setChangingType(true)}>
+                      {inv.is_gst ? 'Make non-GST' : 'Make GST bill'}
+                    </Button>
+                  </Hint>
+                )}
                 <Hint text="Downloads the invoice as a PDF, with your company details and logo, to print or share.">
                   <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => download(`/invoices/${inv.id}/pdf`, `${inv.invoice_number}.pdf`).catch((e) => toast.error(e.message))}>
                     PDF
@@ -194,6 +203,7 @@ export default function InvoiceDetail() {
               )}
             </div>
           </div>
+          {changingType && <ChangeBillType invoice={inv} onClose={() => setChangingType(false)} />}
           <RecordPayment invoice={inv} open={paying} onClose={() => setPaying(false)} technician={user?.role === 'technician'} />
           <UpiQrDialog open={showUpi} onClose={() => setShowUpi(false)} amount={inv.balance_amount} note={`Invoice ${inv.invoice_number}`} branchId={inv.branch?.id} />
         </>
@@ -237,6 +247,33 @@ function VisitRows({ v }: { v: NonNullable<NonNullable<Invoice['job']>['visits']
         </tr>
       )}
     </>
+  );
+}
+
+/** Prices include GST, so the customer's total doesn't change: only whether tax is split out on the bill. */
+function ChangeBillType({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
+  const toGst = !invoice.is_gst;
+  const m = useApiMutation((body: object) => api.post<{ message?: string }>(`/invoices/${invoice.id}/bill-type`, body), {
+    invalidate: [['invoice', String(invoice.id)], ['invoices']],
+    onSuccess: onClose,
+  });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={toGst ? 'Make this a GST bill?' : 'Make this a non-GST bill?'}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Go back</Button>
+          <Button loading={m.isPending} onClick={() => m.mutate({ is_gst: toGst })}>{toGst ? 'Make GST bill' : 'Make non-GST'}</Button>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-700">
+        The total stays <strong>{money(invoice.total_amount)}</strong>. {toGst ? 'The bill will show the GST included in that amount.' : 'The bill will no longer show any GST.'}
+      </p>
+      <p className="mt-2 text-sm text-slate-500">If you already gave the customer a copy, give them the new one.</p>
+    </Modal>
   );
 }
 
