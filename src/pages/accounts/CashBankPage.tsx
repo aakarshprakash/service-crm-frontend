@@ -12,6 +12,7 @@ import { Button, Card, ConfirmDialog, DataTable, EmptyState, Field, Input, Modal
 import { MethodLabel } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
 import { PeriodFilter, usePeriod } from '@/components/period';
+import { CashRegister } from './CashRegister';
 
 type Book = 'cash' | 'bank';
 interface LedgerEntry { at: string; type: 'receipt' | 'expense' | 'transfer'; ref: string | null; particulars: string; method: string; link: { invoice_id?: number; expense_id?: number; transfer_id?: number }; in: number; out: number; balance: number }
@@ -22,7 +23,7 @@ interface Transfer { id: number; transfer_date: string; direction: 'cash_to_bank
 export default function CashBankPage() {
   const state = usePeriod();
   const { params, set } = state;
-  const tab = (params.get('book') as Book | 'transfers') || 'cash';
+  const tab = (params.get('book') as Book | 'transfers' | 'register') || 'cash';
   const { can } = useAuth();
   const manage = can('expenses.manage');
   const [transfer, setTransfer] = useState(false);
@@ -54,14 +55,21 @@ export default function CashBankPage() {
         onChange={(v) => set({ book: v === 'cash' ? undefined : v })}
         tabs={[
           { value: 'cash', label: 'Cash book' },
+          { value: 'register', label: 'Daily register' },
           { value: 'bank', label: 'Bank book' },
           { value: 'transfers', label: 'Deposits & withdrawals' },
         ]}
       />
-      <Card padded={false} className="mb-6">
-        <PeriodFilter state={state} branches={false} />
-      </Card>
-      {tab === 'transfers' ? <Transfers period={state.period} manage={manage} /> : <LedgerView book={tab} period={state.period} />}
+      {tab === 'register' ? (
+        <CashRegister day={params.get('day') || today()} onDay={(d) => set({ day: d })} />
+      ) : (
+        <>
+          <Card padded={false} className="mb-6">
+            <PeriodFilter state={state} branches={false} />
+          </Card>
+          {tab === 'transfers' ? <Transfers period={state.period} manage={manage} /> : <LedgerView book={tab} period={state.period} />}
+        </>
+      )}
       {transfer && <TransferDialog onClose={() => setTransfer(false)} />}
       {opening && <OpeningDialog onClose={() => { setOpening(false); set({ opening: undefined }); }} />}
     </>

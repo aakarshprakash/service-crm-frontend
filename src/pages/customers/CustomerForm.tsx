@@ -290,7 +290,7 @@ export function ProductFields({ value, onChange, error, prefix = '', title = 'Pr
           <Field label="Warranty expiry" error={f('warranty_expiry')}>
             <Input type="date" value={value.warranty_expiry} onChange={(e) => set('warranty_expiry', e.target.value)} />
           </Field>
-          <Field label="Purchase date" error={f('purchase_date')}>
+          <Field label="Purchase date" required={value.warranty_type === 'in_warranty'} error={f('purchase_date')} hint={value.warranty_type === 'in_warranty' ? 'Needed for a unit in warranty.' : undefined}>
             <Input type="date" value={value.purchase_date} onChange={(e) => set('purchase_date', e.target.value)} />
           </Field>
           <Field label="Dealer" error={f('dealer_id')}>

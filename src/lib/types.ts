@@ -310,6 +310,11 @@ export interface Job {
   cancel_requested_by?: number | null;
   cancel_requested_at?: string | null;
   cancel_requester?: Named | null;
+  /** Left pending / part pending: the next visit waits for the office (Settings → Technician app). */
+  needs_resume_approval?: boolean;
+  resume_requested_at?: string | null;
+  resume_request_note?: string | null;
+  resume_approved_at?: string | null;
   created_at: string;
   call_age_days: number | null;
   customer?: Customer;
