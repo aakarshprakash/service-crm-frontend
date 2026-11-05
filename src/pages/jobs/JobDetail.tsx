@@ -240,7 +240,7 @@ export default function JobDetail() {
                   <p className="font-semibold text-amber-900">
                     {job.resume_requested_at
                       ? `${job.technician?.name ?? 'The technician'} asked to go back to this job on ${dateTime(job.resume_requested_at)}`
-                      : `Left ${label(job.status)}: ${job.technician?.name ?? 'the technician'} needs approval before the next visit`}
+                      : `Left ${label(job.status).toLowerCase()}:${job.technician?.name ?? 'the technician'} needs approval before the next visit`}
                   </p>
                   {job.resume_request_note && <p className="break-words text-amber-800">“{job.resume_request_note}”</p>}
                   {!job.resume_requested_at && <p className="text-amber-800">The job stays assigned to them. Approve when it can go ahead.</p>}

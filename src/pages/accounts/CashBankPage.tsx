@@ -55,8 +55,8 @@ export default function CashBankPage() {
         onChange={(v) => set({ book: v === 'cash' ? undefined : v })}
         tabs={[
           { value: 'cash', label: 'Cash book' },
-          { value: 'register', label: 'Daily register' },
           { value: 'bank', label: 'Bank book' },
+          { value: 'register', label: 'Daily register' },
           { value: 'transfers', label: 'Deposits & withdrawals' },
         ]}
       />

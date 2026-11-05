@@ -65,10 +65,10 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
         {d && (
           <>
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4 print:hidden">
-              <StatCard label="Opening (cash · bank)" value={`${money(d.opening.cash)} · ${money(d.opening.bank)}`} tone="slate" />
               <StatCard label="Received" value={money(d.totals.cash_in + d.totals.bank_in)} tone="green" />
               <StatCard label="Paid out" value={money(d.totals.cash_out + d.totals.bank_out)} tone="amber" />
-              <StatCard label="Closing (cash · bank)" value={`${money(d.closing.cash)} · ${money(d.closing.bank)}`} tone={d.closing.cash < 0 ? 'red' : 'blue'} />
+              <StatCard label="Cash at close" value={money(d.closing.cash)} tone={d.closing.cash < 0 ? 'red' : 'blue'} />
+              <StatCard label="Bank / UPI at close" value={money(d.closing.bank)} tone={d.closing.bank < 0 ? 'red' : 'blue'} />
             </div>
 
             <Card padded={false}>
