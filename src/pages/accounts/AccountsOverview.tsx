@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import type { DayBookRow, Invoice } from '@/lib/types';
 import { Button, Card, Modal, PageHeader, QueryState, SearchInput } from '@/components/ui';
 import { RecordPayment } from '@/pages/invoices/InvoiceDetail';
+import { IncomeDialog } from '@/pages/expenses/IncomePage';
+import { ExpenseDialog } from '@/pages/expenses/ExpensesPage';
 import { MethodLabel } from '@/components/domain';
 
 interface Overview {
@@ -39,6 +41,8 @@ export default function AccountsOverview() {
   const q = useQuery({ queryKey: ['books', 'overview'], queryFn: () => api.get<Envelope<Overview>>('/books/overview').then((r) => r.data) });
   const d = q.data;
   const [paying, setPaying] = useState(false);
+  // Add income / Add expense open their form here; saving refreshes this page, nobody is sent elsewhere.
+  const [adding, setAdding] = useState<'income' | 'expense' | null>(null);
 
   return (
     <>
@@ -56,12 +60,12 @@ export default function AccountsOverview() {
           </Button>
         )}
         {can('expenses.manage') && (
-          <Button variant="secondary" icon={<ArrowDownLeft className="h-4 w-4" />} onClick={() => navigate('/accounts/income?new=1')}>
+          <Button variant="secondary" icon={<ArrowDownLeft className="h-4 w-4" />} onClick={() => setAdding('income')}>
             Add income
           </Button>
         )}
         {can('expenses.manage') && (
-          <Button variant="secondary" icon={<ArrowUpRight className="h-4 w-4" />} onClick={() => navigate('/accounts/expenses?new=1')}>
+          <Button variant="secondary" icon={<ArrowUpRight className="h-4 w-4" />} onClick={() => setAdding('expense')}>
             Add expense
           </Button>
         )}
@@ -201,6 +205,8 @@ export default function AccountsOverview() {
         )}
       </QueryState>
       {paying && <PaymentPicker onClose={() => setPaying(false)} />}
+      {adding === 'income' && <IncomeDialog income={null} onClose={() => setAdding(null)} />}
+      {adding === 'expense' && <ExpenseDialog expense={null} onClose={() => setAdding(null)} />}
     </>
   );
 }

@@ -1,12 +1,15 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { money, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Button, Input, QueryState } from '@/components/ui';
 import { MethodLabel } from '@/components/domain';
+import { IncomeDialog } from '@/pages/expenses/IncomePage';
+import { ExpenseDialog } from '@/pages/expenses/ExpensesPage';
 
 type Pair = { cash: number; bank: number };
 /** A payment on an invoice, or income received without one (income_id set, no invoice). */
@@ -102,8 +105,11 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
 }
 
 function DayPage({ d }: { d: Day }) {
+  const { can } = useAuth();
   const contraIn = d.transfers.filter((t) => t.cash_in || t.bank_in);
   const contraOut = d.transfers.filter((t) => t.cash_out || t.bank_out);
+  // The forms open over the register, dated the day on screen; saving refreshes this page.
+  const [adding, setAdding] = useState<'income' | 'expense' | null>(null);
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card print:rounded-none print:border-0 print:shadow-none">
@@ -113,12 +119,16 @@ function DayPage({ d }: { d: Day }) {
           <h2 className="text-2xl font-bold tracking-tight text-navy-900">{longDate(d.date)}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <Link to="/accounts/income?new=1" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <ArrowDownLeft className="h-4 w-4 text-emerald-700" /> Add income
-          </Link>
-          <Link to="/accounts/expenses?new=1" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <ArrowUpRight className="h-4 w-4 text-red-700" /> Add expense
-          </Link>
+          {can('expenses.manage') && (
+            <>
+              <Button variant="secondary" size="sm" icon={<ArrowDownLeft className="h-4 w-4 text-emerald-700" />} onClick={() => setAdding('income')}>
+                Add income
+              </Button>
+              <Button variant="secondary" size="sm" icon={<ArrowUpRight className="h-4 w-4 text-red-700" />} onClick={() => setAdding('expense')}>
+                Add expense
+              </Button>
+            </>
+          )}
           <Button variant="secondary" size="sm" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
             Print
           </Button>
@@ -205,6 +215,8 @@ function DayPage({ d }: { d: Day }) {
         <Closing label="Cash at close" hint="Count the office cash: it should match." opening={d.opening.cash} came={d.totals.cash_in} went={d.totals.cash_out} closing={d.closing.cash} />
         <Closing label="Bank / UPI at close" hint="Should match the bank statement for the day." opening={d.opening.bank} came={d.totals.bank_in} went={d.totals.bank_out} closing={d.closing.bank} />
       </div>
+      {adding === 'income' && <IncomeDialog income={null} defaultDate={d.date} onClose={() => setAdding(null)} />}
+      {adding === 'expense' && <ExpenseDialog expense={null} defaultDate={d.date} onClose={() => setAdding(null)} />}
     </article>
   );
 }

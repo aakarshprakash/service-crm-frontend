@@ -153,11 +153,11 @@ export default function ExpensesPage() {
   );
 }
 
-function ExpenseDialog({ expense, onClose }: { expense: Expense | null; onClose: () => void }) {
+export function ExpenseDialog({ expense, onClose, defaultDate }: { expense: Expense | null; onClose: () => void; defaultDate?: string }) {
   const { data: lookups } = useLookups();
   const { data: staff } = useStaffOptions();
   const [form, setForm] = useState({
-    expense_date: expense?.expense_date ?? today(),
+    expense_date: expense?.expense_date ?? defaultDate ?? today(),
     expense_category_id: String(expense?.expense_category_id ?? ''),
     amount: toMajor(expense?.amount),
     payment_method: expense?.payment_method ?? 'cash',

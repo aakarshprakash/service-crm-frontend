@@ -152,11 +152,11 @@ export default function IncomePage() {
   );
 }
 
-function IncomeDialog({ income, onClose }: { income: Income | null; onClose: () => void }) {
+export function IncomeDialog({ income, onClose, defaultDate }: { income: Income | null; onClose: () => void; defaultDate?: string }) {
   const { data: lookups } = useLookups();
   const { data: staff } = useStaffOptions();
   const [form, setForm] = useState({
-    income_date: income?.income_date ?? today(),
+    income_date: income?.income_date ?? defaultDate ?? today(),
     income_category_id: String(income?.income_category_id ?? ''),
     amount: toMajor(income?.amount),
     payment_method: income?.payment_method ?? 'cash',
