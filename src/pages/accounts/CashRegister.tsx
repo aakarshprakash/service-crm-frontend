@@ -9,7 +9,8 @@ import { Button, Card, EmptyState, Input, QueryState, StatCard } from '@/compone
 import { MethodLabel } from '@/components/domain';
 
 type Pair = { cash: number; bank: number };
-interface ReceiptLine { at: string; customer: string; phone: string | null; invoice_id: number; invoice_number: string; job: string | null; ref: string | null; method: string; book: 'cash' | 'bank'; amount: number }
+/** A payment on an invoice, or income received without one (income_id set, no invoice). */
+interface ReceiptLine { at: string | null; customer: string; phone: string | null; invoice_id: number | null; invoice_number: string | null; income_id: number | null; category: string | null; job: string | null; ref: string | null; method: string; book: 'cash' | 'bank'; amount: number }
 interface PaymentLine { expense_id: number; category: string; description: string | null; ref: string | null; method: string; book: 'cash' | 'bank'; amount: number }
 interface Group<L> { party: string; kind?: 'staff' | 'office' | 'online'; lines: L[]; cash: number; bank: number }
 interface Contra { transfer_id: number; particulars: string; ref: string | null; cash_in: number; bank_in: number; cash_out: number; bank_out: number }
@@ -51,7 +52,10 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
             </Button>
           )}
           <div className="ml-auto flex gap-2">
-            <Link to="/expenses" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
+            <Link to="/accounts/income?new=1" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
+              Record income
+            </Link>
+            <Link to="/accounts/expenses?new=1" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
               Record a payment
             </Link>
             <Button variant="secondary" size="sm" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
@@ -111,14 +115,20 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
                           <td colSpan={4} />
                         </tr>
                         {g.lines.map((l) => (
-                          <tr key={`${l.invoice_id}-${l.at}-${l.ref}`} className="hover:bg-slate-50">
+                          <tr key={l.income_id ? `inc-${l.income_id}` : `${l.invoice_id}-${l.at}-${l.ref}`} className="hover:bg-slate-50">
                             <td className="py-1.5 pl-7 pr-3">
-                              <Link to={`/invoices/${l.invoice_id}`} className="text-slate-800 hover:underline">
-                                {l.customer}
-                              </Link>
+                              {l.invoice_id ? (
+                                <Link to={`/invoices/${l.invoice_id}`} className="text-slate-800 hover:underline">
+                                  {l.customer}
+                                </Link>
+                              ) : (
+                                <Link to="/accounts/income" className="text-slate-800 hover:underline">
+                                  {l.customer}
+                                </Link>
+                              )}
                               {l.phone && <span className="ml-2 tabular-nums text-slate-500">{l.phone}</span>}
                               <span className="ml-2 text-xs text-slate-400">
-                                {[l.job, l.invoice_number].filter(Boolean).join(' · ')}
+                                {[l.job, l.invoice_number, l.income_id ? l.category ?? 'Other income' : null].filter(Boolean).join(' · ')}
                                 {l.book === 'bank' && (
                                   <>
                                     {' · '}
@@ -202,7 +212,7 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
               </div>
             </Card>
             <p className="mt-3 text-xs text-slate-500 print:hidden">
-              Cash a technician has collected is listed on the day they collected it, under their name. Expenses are grouped by who was paid: record staff travel, food and advances under Expenses with their name in “Paid to”.
+              Cash a technician has collected is listed on the day they collected it, under their name. Money received without an invoice is added under Income. Expenses are grouped by who was paid: record staff travel, food and advances under Expenses with their name in “Paid to”.
             </p>
           </>
         )}

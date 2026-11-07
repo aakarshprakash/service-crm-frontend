@@ -24,6 +24,7 @@ const InvoicesPage = lazy(() => import('@/pages/invoices/InvoicesPage'));
 const InvoiceDetail = lazy(() => import('@/pages/invoices/InvoiceDetail'));
 const WalkInBill = lazy(() => import('@/pages/invoices/WalkInBill'));
 const ExpensesPage = lazy(() => import('@/pages/expenses/ExpensesPage'));
+const IncomePage = lazy(() => import('@/pages/expenses/IncomePage'));
 const ExpenseClaimsPage = lazy(() => import('@/pages/expenses/ExpenseClaimsPage'));
 const ShareLocation = lazy(() => import('@/pages/public/ShareLocation'));
 const BooksPage = lazy(() => import('@/pages/books/BooksPage'));
@@ -149,6 +150,7 @@ export default function App() {
               <Route path="/accounts" element={<Office ability="accounts.view"><AccountsOverview /></Office>} />
               <Route path="/accounts/receivables" element={<Office ability="accounts.view"><ReceivablesPage /></Office>} />
               <Route path="/accounts/receipts" element={<Office ability="payments.record"><ReceiptsPage /></Office>} />
+              <Route path="/accounts/income" element={<Office ability="expenses.manage"><IncomePage /></Office>} />
               <Route path="/accounts/expenses" element={<Office ability="expenses.manage"><ExpensesPage /></Office>} />
               <Route path="/accounts/expense-claims" element={<Office ability="expenses.manage"><ExpenseClaimsPage /></Office>} />
               <Route path="/accounts/cash-bank" element={<Office ability="accounts.view"><CashBankPage /></Office>} />

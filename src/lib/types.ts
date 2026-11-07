@@ -374,6 +374,7 @@ export interface Lookups {
   complaint_summaries: { id: number; name: string; complaint_type_id: number | null }[];
   action_taken_options: Named[];
   expense_categories: Named[];
+  income_categories?: Named[];
   service_locations: { id: number; name: string; city: string | null; pincodes: string | null }[];
   upi_accounts: UpiAccount[];
   leave_types: LeaveType[];
@@ -598,6 +599,25 @@ export interface Expense {
   creator?: Named | null;
 }
 
+/** Money received without an invoice (Accounts → Income). */
+export interface Income {
+  id: number;
+  income_date: string;
+  income_category_id: number | null;
+  amount: number;
+  payment_method: ExpenseMethod;
+  received_from: string | null;
+  phone: string | null;
+  reference_no: string | null;
+  description: string | null;
+  branch_id: number | null;
+  user_id: number | null;
+  created_at: string;
+  category?: Named | null;
+  branch?: Named | null;
+  user?: Named | null;
+}
+
 export interface BooksSummary {
   from: string;
   to: string;
@@ -605,7 +625,7 @@ export interface BooksSummary {
   expense: number;
   net: number;
   income_by_method: Record<string, number>;
-  income_by_source: { job: number; walk_in: number };
+  income_by_source: { job: number; walk_in: number; other?: number };
   expense_by_method: Record<string, number>;
   expense_by_category: Record<string, number>;
   cash: { in: number; out: number; net: number };

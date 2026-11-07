@@ -133,6 +133,7 @@ function Summary({ period }: { period: Period }) {
                 rows={[
                   ['Service jobs', s.income_by_source.job],
                   ['Walk-in sales', s.income_by_source.walk_in],
+                  ['Other income (no invoice)', s.income_by_source.other ?? 0],
                 ]}
                 total={s.income}
                 color={INCOME}

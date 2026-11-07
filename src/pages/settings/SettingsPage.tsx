@@ -890,6 +890,7 @@ const MASTER_TYPES = [
   { key: 'branches', label: 'Branches', hint: 'Service centres / warehouses holding stock.' },
   { key: 'service-locations', label: 'Service locations', hint: 'Areas you serve. Link technicians to each one so new jobs there can be auto-assigned.' },
   { key: 'expense-categories', label: 'Expense categories', hint: 'Heads for recording expenses, e.g. Fuel, Rent, Salaries.' },
+  { key: 'income-categories', label: 'Income categories', hint: 'Kinds of money received without an invoice, e.g. Service charge (no bill), Scrap sale, Commission.' },
   { key: 'upi-accounts', label: 'UPI accounts', hint: 'UPI IDs you collect into. They are printed as a “scan to pay” QR on invoices and shown to technicians when collecting.' },
   { key: 'shifts', label: 'Shifts', hint: 'Working hours. Set a company default, and give staff their own under HR → Employees. Used to flag late arrival, early leaving and extra time; pay is not affected.' },
   { key: 'leave-types', label: 'Leave types', hint: 'Types of leave staff can apply for, with a yearly quota (0 = not tracked). Unpaid leave is deducted in payroll.' },

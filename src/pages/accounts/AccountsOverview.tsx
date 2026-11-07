@@ -11,7 +11,7 @@ import { Button, Card, PageHeader, QueryState, StatCard } from '@/components/ui'
 import { MethodLabel } from '@/components/domain';
 
 interface Overview {
-  month: { income: number; gst: number; expense: number; net: number; income_by_source: { job: number; walk_in: number }; expense_by_category: Record<string, number> };
+  month: { income: number; gst: number; expense: number; net: number; income_by_source: { job: number; walk_in: number; other?: number }; expense_by_category: Record<string, number> };
   last_month: { income: number; gst: number; expense: number; net: number };
   balances: { cash: number; bank: number; with_technicians: number };
   receivables: { total: number; customers: number; buckets: { d0_30: number; d31_60: number; d61_90: number; d90_plus: number } };
@@ -187,6 +187,7 @@ export default function AccountsOverview() {
                 <dl className="space-y-2 text-sm">
                   <Row k="Service jobs" v={money(d.month.income_by_source.job)} />
                   <Row k="Walk-in sales" v={money(d.month.income_by_source.walk_in)} />
+                  <Row k="Other income (no invoice)" v={money(d.month.income_by_source.other ?? 0)} />
                   <div className="border-t border-slate-100 pt-2" />
                   {Object.entries(d.month.expense_by_category).slice(0, 5).map(([k, v]) => (
                     <Row key={k} k={k} v={`−${money(v)}`} />
