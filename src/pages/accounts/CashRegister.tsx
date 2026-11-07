@@ -53,10 +53,10 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
           )}
           <div className="ml-auto flex gap-2">
             <Link to="/accounts/income?new=1" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
-              Record income
+              Add income
             </Link>
             <Link to="/accounts/expenses?new=1" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
-              Record a payment
+              Add expense
             </Link>
             <Button variant="secondary" size="sm" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
               Print
