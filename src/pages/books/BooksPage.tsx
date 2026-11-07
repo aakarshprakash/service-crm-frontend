@@ -47,8 +47,8 @@ export default function BooksPage() {
   return (
     <>
       <PageHeader
-        title="Day book"
-        description="Every rupee in and out, in order — plus a daily income vs expenses view."
+        title="All transactions"
+        description="Every rupee that came in or went out, in date order, with a day-by-day total."
         actions={
           <Link to="/reports?report=day-book" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline">
             <FileBarChart className="h-4 w-4" /> Export reports

@@ -29,7 +29,7 @@ export default function IncomePage() {
   return (
     <>
       <PageHeader
-        title="Income"
+        title="Other income"
         description="Money received without an invoice: service charges taken on the spot, parts sold over the counter, scrap, commission. Invoice payments are recorded on the invoice."
         actions={
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing('new')}>

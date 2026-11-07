@@ -23,8 +23,8 @@ export default function AccountsPage() {
   return (
     <>
       <PageHeader
-        title="Daily cash close"
-        description="Reconcile cash & cheques collected by service agents against what is handed over and deposited."
+        title="Cash from technicians"
+        description="Cash and cheques technicians collected on jobs: check what each one hands over at the end of the day, and where it was deposited."
         actions={
           is('admin') && (
             <Hint text="Submits a day’s cash close for a technician who couldn’t do it, e.g. they forgot. It skips the rule that earlier days must be closed first. That day’s payments are then locked.">
@@ -40,8 +40,8 @@ export default function AccountsPage() {
         value={tab}
         onChange={(v) => setParams(v === 'queue' ? {} : { tab: v })}
         tabs={[
-          { value: 'queue', label: 'Cash closes' },
-          { value: 'in_hand', label: 'Cash in hand' },
+          { value: 'queue', label: 'Handovers to check' },
+          { value: 'in_hand', label: 'Cash still with technicians' },
         ]}
       />
       {tab === 'queue' ? <Queue /> : <InHand />}
@@ -60,8 +60,8 @@ function Queue() {
       <FilterBar>
         <Select value={f.status ?? ''} onChange={(e) => list.setFilter('status', e.target.value)} className="sm:w-48" aria-label="Status">
           <option value="">All statuses</option>
-          <option value="submitted">Awaiting verification</option>
-          <option value="verified">Verified (cash pending)</option>
+          <option value="submitted">Waiting for you to check</option>
+          <option value="verified">Checked, cash not yet deposited</option>
           <option value="closed">Closed</option>
         </Select>
         <Select value={f.technician_id ?? ''} onChange={(e) => list.setFilter('technician_id', e.target.value)} className="sm:w-48" aria-label="Technician">
@@ -76,7 +76,7 @@ function Queue() {
         <Input type="date" value={f.to ?? ''} onChange={(e) => list.setFilter('to', e.target.value)} className="sm:w-40" aria-label="To" />
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" className="rounded border-slate-300 text-brand-700" checked={f.discrepancy === '1'} onChange={(e) => list.setFilter('discrepancy', e.target.checked ? '1' : '')} />
-          Discrepancies only
+          Short or extra only
         </label>
       </FilterBar>
       <DataTable
@@ -89,10 +89,10 @@ function Queue() {
           { key: 'date', header: 'Date', render: (c) => <span className="font-medium text-slate-900">{date(c.close_date)}</span> },
           { key: 'tech', header: 'Technician', render: (c) => c.technician?.name },
           { key: 'branch', header: 'Branch', hideOnMobile: true, render: (c) => c.branch?.name ?? '—' },
-          { key: 'expected', header: 'Expected', render: (c) => money(c.expected_in_hand), className: 'text-right tabular-nums', headerClassName: 'text-right' },
+          { key: 'expected', header: 'Should hand over', render: (c) => money(c.expected_in_hand), className: 'text-right tabular-nums', headerClassName: 'text-right' },
           {
             key: 'declared',
-            header: 'Declared',
+            header: 'Handed over',
             className: 'text-right tabular-nums',
             headerClassName: 'text-right',
             render: (c) => (
@@ -102,8 +102,8 @@ function Queue() {
               </span>
             ),
           },
-          { key: 'disc', header: 'Discrepancy', hideOnMobile: true, render: (c) => (c.status === 'submitted' ? '—' : <span className={c.discrepancy_amount ? 'font-medium text-red-700' : ''}>{money(c.discrepancy_amount)}</span>), className: 'text-right tabular-nums', headerClassName: 'text-right' },
-          { key: 'carry', header: 'Carry fwd', hideOnMobile: true, render: (c) => money(c.closing_balance), className: 'text-right tabular-nums', headerClassName: 'text-right' },
+          { key: 'disc', header: 'Short / extra', hideOnMobile: true, render: (c) => (c.status === 'submitted' ? '—' : <span className={c.discrepancy_amount ? 'font-medium text-red-700' : ''}>{money(c.discrepancy_amount)}</span>), className: 'text-right tabular-nums', headerClassName: 'text-right' },
+          { key: 'carry', header: 'Still with them', hideOnMobile: true, render: (c) => money(c.closing_balance), className: 'text-right tabular-nums', headerClassName: 'text-right' },
           { key: 'status', header: 'Status', render: (c) => <span className="flex items-center gap-1"><StatusBadge status={c.status} />{c.force_closed && <span className="text-[11px] text-slate-500">forced</span>}</span> },
         ]}
       />
@@ -141,8 +141,8 @@ function InHand() {
           columns={[
             { key: 'name', header: 'Technician', render: (r) => <span className="font-medium text-slate-900">{r.technician.name}</span> },
             { key: 'branch', header: 'Branch', hideOnMobile: true, render: (r) => r.technician.branch ?? '—' },
-            { key: 'last', header: 'Last close', render: (r) => (r.last_close ? <span className="flex items-center gap-2">{date(r.last_close.close_date)} <StatusBadge status={r.last_close.status} /></span> : 'Never') },
-            { key: 'hand', header: 'Cash in hand', render: (r) => <span className={r.cash_in_hand > 0 ? 'font-semibold text-amber-800' : ''}>{money(r.cash_in_hand)}</span>, className: 'text-right tabular-nums', headerClassName: 'text-right' },
+            { key: 'last', header: 'Last handover', render: (r) => (r.last_close ? <span className="flex items-center gap-2">{date(r.last_close.close_date)} <StatusBadge status={r.last_close.status} /></span> : 'Never') },
+            { key: 'hand', header: 'Cash with them', render: (r) => <span className={r.cash_in_hand > 0 ? 'font-semibold text-amber-800' : ''}>{money(r.cash_in_hand)}</span>, className: 'text-right tabular-nums', headerClassName: 'text-right' },
             { key: 'act', header: '', render: () => <BookOpen className="h-4 w-4 text-slate-400" />, className: 'w-8' },
           ]}
         />

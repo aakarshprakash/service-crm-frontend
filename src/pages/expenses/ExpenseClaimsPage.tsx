@@ -24,7 +24,7 @@ export default function ExpenseClaimsPage() {
   return (
     <>
       <PageHeader
-        title="Expense claims"
+        title="Staff expense claims"
         description="What technicians and staff spent in the field. Approving a claim records it in Expenses."
         back={
           <Link to="/accounts/expenses" className="mb-2 inline-flex text-sm text-slate-500 hover:text-slate-700">

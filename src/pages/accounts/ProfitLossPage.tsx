@@ -32,7 +32,7 @@ export default function ProfitLossPage() {
     <>
       <PageHeader
         title="Profit & loss"
-        description="Income received against expenses paid (cash basis), compared with the previous period of the same length."
+        description="Did the business make money? Everything received against everything spent, compared with the period before."
         actions={
           <>
             <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>

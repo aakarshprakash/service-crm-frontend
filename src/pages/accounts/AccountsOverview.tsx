@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowDownLeft, ArrowUpRight, Banknote, Building, HandCoins, Plus, Store, Users, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Banknote, Building, CalendarDays, HandCoins, Store, Users, Wallet } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { money, moneyShort } from '@/lib/format';
@@ -41,14 +41,9 @@ export default function AccountsOverview() {
     <>
       <PageHeader
         title="Accounts"
-        description="Money in, money out and what customers owe — on a simple cash basis."
+        description="Where your money is, what came in and went out this month, and who still owes you."
         actions={
           <>
-            {can('expenses.manage') && (
-              <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/accounts/expenses?new=1')}>
-                Expense
-              </Button>
-            )}
             {can('billing.walkin') && (
               <Button icon={<Store className="h-4 w-4" />} onClick={() => navigate('/invoices/walk-in/new')}>
                 New invoice
@@ -69,25 +64,24 @@ export default function AccountsOverview() {
               </div>
             )}
 
-            {/* Every accounts screen, one click away */}
-            <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Accounts sections">
-              {[
-                ['Receivables', '/accounts/receivables', can('accounts.view')],
-                ['Receipts', '/accounts/receipts', can('payments.record')],
-                ['Expenses', '/accounts/expenses', can('expenses.manage')],
-                ['Expense claims', '/accounts/expense-claims', can('expenses.manage')],
-                ['Cash & bank', '/accounts/cash-bank', can('accounts.view')],
-                ['Day book', '/accounts/books', can('accounts.view')],
-                ['Profit & loss', '/accounts/profit-loss', can('accounts.view')],
-                ['Cash close', '/accounts/cash-close', can('cash.verify')],
-              ]
-                .filter(([, , show]) => show)
-                .map(([text, to]) => (
-                  <Link key={to as string} to={to as string} className="shrink-0 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-700">
-                    {text as string}
-                  </Link>
-                ))}
-            </nav>
+            {/* The day's jobs, in the order they come up: what someone opening Accounts usually came to do. */}
+            <section aria-labelledby="todo">
+              <h2 id="todo" className="mb-2 text-sm font-semibold text-slate-700">What do you want to do?</h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {can('accounts.view') && <Task icon={<CalendarDays className="h-5 w-5" />} title="See today's register" text="Everything received and paid today, by person." to="/accounts/register" />}
+                {can('cash.verify') && (
+                  <Task
+                    icon={<Wallet className="h-5 w-5" />}
+                    title="Check cash from technicians"
+                    text={d.pending_cash_closes ? `${d.pending_cash_closes} handover${d.pending_cash_closes > 1 ? 's' : ''} waiting for you to check.` : 'Count what each technician hands over.'}
+                    to="/accounts/cash-close"
+                    alert={d.pending_cash_closes > 0}
+                  />
+                )}
+                {can('expenses.manage') && <Task icon={<ArrowDownLeft className="h-5 w-5" />} title="Record money received" text="No bill for it? A service charge, part sale or scrap." to="/accounts/income?new=1" />}
+                {can('expenses.manage') && <Task icon={<ArrowUpRight className="h-5 w-5" />} title="Record an expense" text="Fuel, food, parts, rent, staff advance…" to="/accounts/expenses?new=1" />}
+              </div>
+            </section>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Received this month" value={money(d.month.income)} hint={change(d.month.income, d.last_month.income)} tone="blue" icon={<ArrowDownLeft className="h-5 w-5" />} />
@@ -99,7 +93,7 @@ export default function AccountsOverview() {
                 tone={d.month.net >= 0 ? 'green' : 'red'}
                 onClick={() => navigate('/accounts/profit-loss')}
               />
-              <StatCard label="Receivable from customers" value={money(d.receivables.total)} hint={`${d.receivables.customers} customer${d.receivables.customers === 1 ? '' : 's'}`} tone={d.receivables.total ? 'red' : 'slate'} icon={<Users className="h-5 w-5" />} onClick={() => navigate('/accounts/receivables')} />
+              <StatCard label="Customers owe you" value={money(d.receivables.total)} hint={`${d.receivables.customers} customer${d.receivables.customers === 1 ? '' : 's'}`} tone={d.receivables.total ? 'red' : 'slate'} icon={<Users className="h-5 w-5" />} onClick={() => navigate('/accounts/receivables')} />
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -110,7 +104,7 @@ export default function AccountsOverview() {
                 label="Cash with technicians"
                 value={d.balances.with_technicians}
                 to="/accounts/cash-close?tab=in_hand"
-                note={d.pending_cash_closes ? `${d.pending_cash_closes} cash close${d.pending_cash_closes > 1 ? 's' : ''} to verify` : undefined}
+                note={d.pending_cash_closes ? `${d.pending_cash_closes} handover${d.pending_cash_closes > 1 ? 's' : ''} to check` : undefined}
               />
             </div>
 
@@ -130,7 +124,7 @@ export default function AccountsOverview() {
                   </ResponsiveContainer>
                 </div>
               </Card>
-              <Card title="Receivables by age">
+              <Card title="How long customers have owed">
                 <ul className="space-y-3">
                   {(
                     [
@@ -158,7 +152,7 @@ export default function AccountsOverview() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
-              <Card title="Recent transactions" padded={false} className="lg:col-span-2" actions={<Link to="/accounts/books" className="text-sm font-medium text-brand-700 hover:underline">Day book →</Link>}>
+              <Card title="Recent transactions" padded={false} className="lg:col-span-2" actions={<Link to="/accounts/books" className="text-sm font-medium text-brand-700 hover:underline">All transactions →</Link>}>
                 {!d.recent.length ? (
                   <p className="px-5 py-8 text-center text-sm text-slate-500">No money in or out in the last 30 days.</p>
                 ) : (
@@ -208,6 +202,25 @@ export default function AccountsOverview() {
         )}
       </QueryState>
     </>
+  );
+}
+
+/** One thing to do, as a large button: an icon, what it does, and a line on when to use it. */
+function Task({ icon, title, text, to, alert }: { icon: React.ReactNode; title: string; text: string; to: string; alert?: boolean }) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        'flex items-start gap-3 rounded-xl border bg-white p-4 shadow-card transition hover:border-brand-400 hover:bg-brand-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+        alert ? 'border-amber-300' : 'border-slate-200',
+      )}
+    >
+      <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', alert ? 'bg-amber-100 text-amber-800' : 'bg-brand-50 text-brand-700')}>{icon}</span>
+      <span className="min-w-0">
+        <span className="block font-semibold text-slate-900">{title}</span>
+        <span className={cn('mt-0.5 block text-sm', alert ? 'font-medium text-amber-800' : 'text-slate-500')}>{text}</span>
+      </span>
+    </Link>
   );
 }
 
