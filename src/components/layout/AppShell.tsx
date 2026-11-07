@@ -370,7 +370,7 @@ export function AppShell() {
         </div>
       )}
 
-      <div className={cn('transition-[padding] duration-200', collapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
+      <div className={cn('transition-[padding] duration-200 print:!pl-0', collapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
         {user?.impersonating && (
           <div className="flex items-center justify-center gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
             {t('shell.impersonating', { name: user.name, company: user.tenant?.name })}

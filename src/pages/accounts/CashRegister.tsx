@@ -1,11 +1,11 @@
-import { Fragment } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
-import { date, money, today } from '@/lib/format';
+import { money, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { Button, Card, EmptyState, Input, QueryState, StatCard } from '@/components/ui';
+import { Button, Input, QueryState } from '@/components/ui';
 import { MethodLabel } from '@/components/domain';
 
 type Pair = { cash: number; bank: number };
@@ -13,210 +13,270 @@ type Pair = { cash: number; bank: number };
 interface ReceiptLine { at: string | null; customer: string; phone: string | null; invoice_id: number | null; invoice_number: string | null; income_id: number | null; category: string | null; job: string | null; ref: string | null; method: string; book: 'cash' | 'bank'; amount: number }
 interface PaymentLine { expense_id: number; category: string; description: string | null; ref: string | null; method: string; book: 'cash' | 'bank'; amount: number }
 interface Group<L> { party: string; kind?: 'staff' | 'office' | 'online'; lines: L[]; cash: number; bank: number }
-interface Contra { transfer_id: number; particulars: string; ref: string | null; cash_in: number; bank_in: number; cash_out: number; bank_out: number }
+interface Contra { transfer_id: number | null; particulars: string; ref: string | null; cash_in: number; bank_in: number; cash_out: number; bank_out: number }
 interface Totals { cash_in: number; bank_in: number; cash_out: number; bank_out: number }
 interface Day { date: string; opening: Pair; receipts: Group<ReceiptLine>[]; payments: Group<PaymentLine>[]; transfers: Contra[]; totals: Totals; closing: Pair; empty: boolean }
 interface Register { from: string; to: string; opening: Pair; days: Day[]; totals: Totals; closing: Pair }
 
-const shift = (d: string, days: number) => {
-  const t = new Date(`${d}T12:00:00`);
-  t.setDate(t.getDate() + days);
-  return t.toISOString().slice(0, 10);
-};
+const IN = 'text-emerald-700';
+const OUT = 'text-red-700';
 
-/** One amount in its column: blank when zero, the way a register is written. */
-function Amt({ v, tone, strong }: { v: number; tone?: 'in' | 'out'; strong?: boolean }) {
-  return <td className={cn('px-3 py-1.5 text-right tabular-nums', !v && 'text-slate-300', v && tone === 'in' && 'text-emerald-700', v && tone === 'out' && 'text-red-700', strong && 'font-semibold')}>{v ? money(v) : ''}</td>;
+/** Dates are local calendar days: work at noon so no timezone moves them. */
+const asDate = (d: string) => new Date(`${d}T12:00:00`);
+const iso = (t: Date) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+const shift = (d: string, days: number) => {
+  const t = asDate(d);
+  t.setDate(t.getDate() + days);
+  return iso(t);
+};
+/** Monday of the week the day falls in. */
+const weekStart = (d: string) => shift(d, -((asDate(d).getDay() + 6) % 7));
+const longDate = (d: string) => asDate(d).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+/** An amount in a ledger column: blank when there's nothing, the way the paper book is kept. */
+function Amt({ v, tone, strong, className }: { v: number; tone?: string; strong?: boolean; className?: string }) {
+  return <span className={cn('text-right tabular-nums', v ? tone : 'text-transparent', strong && 'font-semibold', className)}>{v ? money(v) : '0'}</span>;
 }
 
 /**
- * Daily cash transaction register: one day of money in and out, laid out like the paper book.
- * "From" whoever brought the money in, each customer on a line with their phone; "To" whoever was paid.
- * Receipts (CR) on the left, payments (DR) on the right, each split into Cash and Bank / UPI.
+ * Daily cash register, kept like a cash book: what came in on the left, what went out on the right, each in a
+ * Cash and a Bank / UPI column, money grouped by the person who brought it in or was paid. The day closes with
+ * the sum that should match the cash drawer.
  */
 export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) => void }) {
-  const q = useQuery({ queryKey: ['books', 'register', day], queryFn: () => api.get<Envelope<Register>>('/books/register', { from: day, to: day }).then((r) => r.data) });
-  const d = q.data?.days[0];
-  const isToday = day >= today();
+  const monday = weekStart(day);
+  const sunday = shift(monday, 6);
+  // The whole week in one call: the strip shows which days have entries, the page shows the chosen one.
+  const q = useQuery({ queryKey: ['books', 'register', monday], queryFn: () => api.get<Envelope<Register>>('/books/register', { from: monday, to: sunday > today() ? today() : sunday }).then((r) => r.data) });
+  const days = useMemo(() => new Map((q.data?.days ?? []).map((x) => [x.date, x])), [q.data]);
+  const d = days.get(day);
+  const latest = day >= today();
 
   return (
     <>
-      <Card padded={false} className="mb-4 print:hidden">
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-          <Button variant="secondary" size="sm" icon={<ChevronLeft className="h-4 w-4" />} aria-label="Previous day" onClick={() => onDay(shift(day, -1))} />
-          <Input type="date" value={day} max={today()} onChange={(e) => e.target.value && onDay(e.target.value)} className="w-44" aria-label="Day" />
-          <Button variant="secondary" size="sm" icon={<ChevronRight className="h-4 w-4" />} aria-label="Next day" disabled={isToday} onClick={() => onDay(shift(day, 1))} />
-          {!isToday && (
-            <Button variant="ghost" size="sm" onClick={() => onDay(today())}>
-              Today
-            </Button>
-          )}
-          <div className="ml-auto flex gap-2">
-            <Link to="/accounts/income?new=1" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
-              Add income
-            </Link>
-            <Link to="/accounts/expenses?new=1" className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
-              Add expense
-            </Link>
-            <Button variant="secondary" size="sm" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
-              Print
-            </Button>
-          </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+        <Button variant="secondary" size="sm" icon={<ChevronLeft className="h-4 w-4" />} aria-label="Previous week" onClick={() => onDay(shift(day, -7))} />
+        <div className="order-first flex min-w-0 basis-full gap-1 overflow-x-auto pb-1 sm:order-none sm:basis-0 sm:flex-1 sm:pb-0" role="tablist" aria-label="Days of the week">
+          {Array.from({ length: 7 }, (_, i) => shift(monday, i)).map((date) => {
+            const x = days.get(date);
+            const future = date > today();
+            const on = date === day;
+            const moved = x ? x.totals.cash_in + x.totals.bank_in : 0;
+            return (
+              <button
+                key={date}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                disabled={future}
+                onClick={() => onDay(date)}
+                className={cn(
+                  'min-w-[3.25rem] flex-1 rounded-lg border px-2 py-2 sm:min-w-[4.75rem] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                  on ? 'border-navy-900 bg-navy-900 text-white' : 'border-slate-200 bg-white hover:border-brand-300',
+                  future && 'cursor-not-allowed opacity-40',
+                )}
+              >
+                <span className={cn('block text-xs', on ? 'text-white/70' : 'text-slate-500')}>{asDate(date).toLocaleDateString('en-IN', { weekday: 'short' })}</span>
+                <span className="block text-sm font-semibold">{asDate(date).getDate()}</span>
+                <span className={cn('block truncate text-[11px] tabular-nums', on ? 'text-white/80' : x && !x.empty ? 'text-emerald-700' : 'text-slate-400')}>
+                  {future ? '' : !x ? '…' : x.empty ? 'Nothing' : moved ? `+${money(moved).replace(/\.00$/, '')}` : 'Paid out only'}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </Card>
+        <Button variant="secondary" size="sm" icon={<ChevronRight className="h-4 w-4" />} aria-label="Next week" disabled={sunday >= today()} onClick={() => onDay(shift(day, 7) > today() ? today() : shift(day, 7))} />
+        <Input type="date" value={day} max={today()} onChange={(e) => e.target.value && onDay(e.target.value)} className="w-40" aria-label="Go to a date" />
+        {!latest && (
+          <Button variant="ghost" size="sm" onClick={() => onDay(today())}>
+            Today
+          </Button>
+        )}
+      </div>
 
       <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
-        {d && (
-          <>
-            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4 print:hidden">
-              <StatCard label="Received" value={money(d.totals.cash_in + d.totals.bank_in)} tone="green" />
-              <StatCard label="Paid out" value={money(d.totals.cash_out + d.totals.bank_out)} tone="amber" />
-              <StatCard label="Cash at close" value={money(d.closing.cash)} tone={d.closing.cash < 0 ? 'red' : 'blue'} />
-              <StatCard label="Bank / UPI at close" value={money(d.closing.bank)} tone={d.closing.bank < 0 ? 'red' : 'blue'} />
-            </div>
-
-            <Card padded={false}>
-              <div className="hidden px-4 pt-4 print:block">
-                <h2 className="text-lg font-semibold">Daily cash register · {date(d.date)}</h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                      <th rowSpan={2} className="px-3 py-2 text-left font-semibold">
-                        {date(d.date)}
-                      </th>
-                      <th colSpan={2} className="border-l border-slate-200 px-3 pt-2 text-center font-semibold text-emerald-700">
-                        Received (CR)
-                      </th>
-                      <th colSpan={2} className="border-l border-slate-200 px-3 pt-2 text-center font-semibold text-red-700">
-                        Paid (DR)
-                      </th>
-                    </tr>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-                      <th className="border-l border-slate-200 px-3 pb-2 text-right font-medium">Cash</th>
-                      <th className="px-3 pb-2 text-right font-medium">Bank / UPI</th>
-                      <th className="border-l border-slate-200 px-3 pb-2 text-right font-medium">Cash</th>
-                      <th className="px-3 pb-2 text-right font-medium">Bank / UPI</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    <tr className="bg-slate-50/60">
-                      <td className="px-3 py-2 font-medium text-slate-700">Opening balance</td>
-                      <Amt v={d.opening.cash} strong />
-                      <Amt v={d.opening.bank} strong />
-                      <td colSpan={2} />
-                    </tr>
-
-                    {d.receipts.map((g) => (
-                      <Fragment key={`in-${g.party}`}>
-                        <tr>
-                          <td className="px-3 pb-0.5 pt-3 font-semibold text-slate-900">From {g.party}</td>
-                          <td colSpan={4} />
-                        </tr>
-                        {g.lines.map((l) => (
-                          <tr key={l.income_id ? `inc-${l.income_id}` : `${l.invoice_id}-${l.at}-${l.ref}`} className="hover:bg-slate-50">
-                            <td className="py-1.5 pl-7 pr-3">
-                              {l.invoice_id ? (
-                                <Link to={`/invoices/${l.invoice_id}`} className="text-slate-800 hover:underline">
-                                  {l.customer}
-                                </Link>
-                              ) : (
-                                <Link to="/accounts/income" className="text-slate-800 hover:underline">
-                                  {l.customer}
-                                </Link>
-                              )}
-                              {l.phone && <span className="ml-2 tabular-nums text-slate-500">{l.phone}</span>}
-                              <span className="ml-2 text-xs text-slate-400">
-                                {[l.job, l.invoice_number, l.income_id ? l.category ?? 'Other income' : null].filter(Boolean).join(' · ')}
-                                {l.book === 'bank' && (
-                                  <>
-                                    {' · '}
-                                    <MethodLabel method={l.method} />
-                                  </>
-                                )}
-                              </span>
-                            </td>
-                            <Amt v={l.book === 'cash' ? l.amount : 0} tone="in" />
-                            <Amt v={l.book === 'bank' ? l.amount : 0} tone="in" />
-                            <td colSpan={2} />
-                          </tr>
-                        ))}
-                      </Fragment>
-                    ))}
-
-                    {d.payments.map((g) => (
-                      <Fragment key={`out-${g.party}`}>
-                        <tr>
-                          <td className="px-3 pb-0.5 pt-3 font-semibold text-slate-900">To {g.party}</td>
-                          <td colSpan={4} />
-                        </tr>
-                        {g.lines.map((l) => (
-                          <tr key={l.expense_id} className="hover:bg-slate-50">
-                            <td className="py-1.5 pl-7 pr-3 text-slate-800">
-                              {l.category}
-                              {l.description && <span className="ml-2 text-slate-500">{l.description}</span>}
-                              {l.book === 'bank' && (
-                                <span className="ml-2 text-xs text-slate-400">
-                                  <MethodLabel method={l.method} />
-                                </span>
-                              )}
-                            </td>
-                            <td colSpan={2} />
-                            <Amt v={l.book === 'cash' ? l.amount : 0} tone="out" />
-                            <Amt v={l.book === 'bank' ? l.amount : 0} tone="out" />
-                          </tr>
-                        ))}
-                      </Fragment>
-                    ))}
-
-                    {d.transfers.map((t) => (
-                      <tr key={t.transfer_id}>
-                        <td className="px-3 py-1.5 text-slate-800">
-                          {t.particulars}
-                          <span className="ml-2 text-xs text-slate-400">Contra{t.ref ? ` · ${t.ref}` : ''}</span>
-                        </td>
-                        <Amt v={t.cash_in} tone="in" />
-                        <Amt v={t.bank_in} tone="in" />
-                        <Amt v={t.cash_out} tone="out" />
-                        <Amt v={t.bank_out} tone="out" />
-                      </tr>
-                    ))}
-
-                    {d.empty && (
-                      <tr>
-                        <td colSpan={5}>
-                          <EmptyState title="Nothing received or paid on this day" message="Payments collected by technicians and the office, expenses and deposits appear here." />
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot className="border-t-2 border-slate-200">
-                    <tr className="bg-slate-50/60">
-                      <td className="px-3 py-2 font-semibold text-slate-900">Day total</td>
-                      <Amt v={d.totals.cash_in} tone="in" strong />
-                      <Amt v={d.totals.bank_in} tone="in" strong />
-                      <Amt v={d.totals.cash_out} tone="out" strong />
-                      <Amt v={d.totals.bank_out} tone="out" strong />
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 font-semibold text-slate-900">Closing balance</td>
-                      <td className={cn('px-3 py-2 text-right font-bold tabular-nums', d.closing.cash < 0 && 'text-red-700')}>{money(d.closing.cash)}</td>
-                      <td className={cn('px-3 py-2 text-right font-bold tabular-nums', d.closing.bank < 0 && 'text-red-700')}>{money(d.closing.bank)}</td>
-                      <td colSpan={2} className="px-3 py-2 text-right text-xs text-slate-500">
-                        Cash {money(d.opening.cash)} + {money(d.totals.cash_in)} − {money(d.totals.cash_out)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </Card>
-            <p className="mt-3 text-xs text-slate-500 print:hidden">
-              Cash a technician has collected is listed on the day they collected it, under their name. Money received without an invoice is added under Income. Expenses are grouped by who was paid: record staff travel, food and advances under Expenses with their name in “Paid to”.
-            </p>
-          </>
-        )}
+        {d && <DayPage d={d} />}
       </QueryState>
     </>
+  );
+}
+
+function DayPage({ d }: { d: Day }) {
+  const contraIn = d.transfers.filter((t) => t.cash_in || t.bank_in);
+  const contraOut = d.transfers.filter((t) => t.cash_out || t.bank_out);
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card print:rounded-none print:border-0 print:shadow-none">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b-2 border-navy-900 px-5 pb-4 pt-5">
+        <div>
+          <p className="text-sm text-slate-500 print:text-black">Daily register</p>
+          <h2 className="text-2xl font-bold tracking-tight text-navy-900">{longDate(d.date)}</h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <Link to="/accounts/income?new=1" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <ArrowDownLeft className="h-4 w-4 text-emerald-700" /> Add income
+          </Link>
+          <Link to="/accounts/expenses?new=1" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <ArrowUpRight className="h-4 w-4 text-red-700" /> Add expense
+          </Link>
+          <Button variant="secondary" size="sm" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
+            Print
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-x-8 gap-y-1 border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm">
+        <span className="text-slate-600">Brought forward</span>
+        <span>
+          Cash <strong className="tabular-nums text-slate-900">{money(d.opening.cash)}</strong>
+        </span>
+        <span>
+          Bank / UPI <strong className="tabular-nums text-slate-900">{money(d.opening.bank)}</strong>
+        </span>
+      </div>
+
+      {d.empty ? (
+        <div className="px-5 py-14 text-center">
+          <p className="font-semibold text-slate-900">Nothing was received or paid on this day</p>
+          <p className="mt-1 text-sm text-slate-500">Payments technicians collect, bills paid at the office, income and expenses appear here as they are recorded.</p>
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-2">
+          <Side title="Came in" tone={IN} total={{ cash: d.totals.cash_in, bank: d.totals.bank_in }} className="lg:border-r-[3px] lg:border-double lg:border-r-navy-900">
+            {d.receipts.map((g) => (
+              <PersonGroup key={`in-${g.party}`} label={`From ${g.party}`} cash={g.cash} bank={g.bank} tone={IN}>
+                {g.lines.map((l) => (
+                  <Line
+                    key={l.income_id ? `inc-${l.income_id}` : `${l.invoice_id}-${l.at}-${l.ref}`}
+                    main={
+                      <Link to={l.invoice_id ? `/invoices/${l.invoice_id}` : '/accounts/income'} className="font-medium text-slate-900 hover:underline">
+                        {l.customer}
+                      </Link>
+                    }
+                    sub={[l.phone, l.invoice_number ?? l.category, l.job].filter(Boolean).join(', ')}
+                    method={l.book === 'bank' ? l.method : null}
+                    cash={l.book === 'cash' ? l.amount : 0}
+                    bank={l.book === 'bank' ? l.amount : 0}
+                    tone={IN}
+                  />
+                ))}
+              </PersonGroup>
+            ))}
+            {contraIn.length > 0 && (
+              <PersonGroup label="Moved between cash and bank" tone={IN}>
+                {contraIn.map((t, i) => (
+                  <Line key={`ci-${i}`} main={<span className="text-slate-900">{t.particulars}</span>} sub={t.ref ?? ''} cash={t.cash_in} bank={t.bank_in} tone={IN} />
+                ))}
+              </PersonGroup>
+            )}
+            {!d.receipts.length && !contraIn.length && <Nothing>No money came in.</Nothing>}
+          </Side>
+
+          <Side title="Went out" tone={OUT} total={{ cash: d.totals.cash_out, bank: d.totals.bank_out }} className="border-t border-slate-200 lg:border-t-0">
+            {d.payments.map((g) => (
+              <PersonGroup key={`out-${g.party}`} label={`To ${g.party}`} cash={g.cash} bank={g.bank} tone={OUT}>
+                {g.lines.map((l) => (
+                  <Line
+                    key={l.expense_id}
+                    main={<span className="font-medium text-slate-900">{l.category}</span>}
+                    sub={[l.description, l.ref].filter(Boolean).join(', ')}
+                    method={l.book === 'bank' ? l.method : null}
+                    cash={l.book === 'cash' ? l.amount : 0}
+                    bank={l.book === 'bank' ? l.amount : 0}
+                    tone={OUT}
+                  />
+                ))}
+              </PersonGroup>
+            ))}
+            {contraOut.length > 0 && (
+              <PersonGroup label="Moved between cash and bank" tone={OUT}>
+                {contraOut.map((t, i) => (
+                  <Line key={`co-${i}`} main={<span className="text-slate-900">{t.particulars}</span>} sub={t.ref ?? ''} cash={t.cash_out} bank={t.bank_out} tone={OUT} />
+                ))}
+              </PersonGroup>
+            )}
+            {!d.payments.length && !contraOut.length && <Nothing>Nothing was paid out.</Nothing>}
+          </Side>
+        </div>
+      )}
+
+      {/* The evening check: what the cash drawer should hold now, worked out as a sum. */}
+      <div className="grid gap-px border-t-2 border-navy-900 bg-slate-200 sm:grid-cols-2">
+        <Closing label="Cash at close" hint="Count the office cash: it should match." opening={d.opening.cash} came={d.totals.cash_in} went={d.totals.cash_out} closing={d.closing.cash} />
+        <Closing label="Bank / UPI at close" hint="Should match the bank statement for the day." opening={d.opening.bank} came={d.totals.bank_in} went={d.totals.bank_out} closing={d.closing.bank} />
+      </div>
+    </article>
+  );
+}
+
+/** One side of the book, with its own Cash and Bank / UPI columns and total. */
+function Side({ title, tone, total, className, children }: { title: string; tone: string; total: Pair; className?: string; children: ReactNode }) {
+  return (
+    <section className={cn('flex flex-col', className)} aria-label={title}>
+      <div className="grid grid-cols-[minmax(0,1fr)_5rem_5rem] sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] items-end gap-x-3 border-b border-slate-200 px-5 pb-2 pt-4">
+        <h3 className={cn('text-base font-semibold', tone)}>{title}</h3>
+        <span className="text-right text-xs font-medium text-slate-500">Cash</span>
+        <span className="text-right text-xs font-medium text-slate-500">Bank / UPI</span>
+      </div>
+      <div className="flex-1 pb-2">{children}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)_5rem_5rem] sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] gap-x-3 border-t border-slate-300 bg-slate-50/70 px-5 py-2.5 text-sm">
+        <span className="font-semibold text-slate-900">Total {title.toLowerCase()}</span>
+        <Amt v={total.cash} tone={tone} strong />
+        <Amt v={total.bank} tone={tone} strong />
+      </div>
+    </section>
+  );
+}
+
+function PersonGroup({ label, cash, bank, tone, children }: { label: string; cash?: number; bank?: number; tone: string; children: ReactNode }) {
+  return (
+    <div className="border-b border-dashed border-slate-200 last:border-b-0">
+      <div className="grid grid-cols-[minmax(0,1fr)_5rem_5rem] sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] gap-x-3 px-5 pb-1 pt-3 text-sm">
+        <span className="truncate font-semibold text-navy-900">{label}</span>
+        {cash !== undefined && <Amt v={cash} tone={tone} className="text-xs opacity-70" />}
+        {bank !== undefined && <Amt v={bank} tone={tone} className="text-xs opacity-70" />}
+      </div>
+      <ul>{children}</ul>
+    </div>
+  );
+}
+
+function Line({ main, sub, method, cash, bank, tone }: { main: ReactNode; sub: string; method?: string | null; cash: number; bank: number; tone: string }) {
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_5rem_5rem] sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] items-baseline gap-x-3 px-5 py-1.5 text-sm hover:bg-slate-50">
+      <span className="min-w-0 pl-3">
+        <span className="block break-words">{main}</span>
+        {(sub || method) && (
+          <span className="block truncate text-xs text-slate-500">
+            {sub}
+            {method && (
+              <>
+                {sub ? ', ' : ''}
+                <MethodLabel method={method} />
+              </>
+            )}
+          </span>
+        )}
+      </span>
+      <Amt v={cash} tone={tone} />
+      <Amt v={bank} tone={tone} />
+    </li>
+  );
+}
+
+function Nothing({ children }: { children: ReactNode }) {
+  return <p className="px-5 py-6 text-sm text-slate-500">{children}</p>;
+}
+
+function Closing({ label, hint, opening, came, went, closing }: { label: string; hint: string; opening: number; came: number; went: number; closing: number }) {
+  return (
+    <div className="bg-white px-5 py-4">
+      <p className="text-sm text-slate-600">{label}</p>
+      <p className={cn('mt-0.5 text-2xl font-bold tracking-tight tabular-nums', closing < 0 ? OUT : 'text-navy-900')}>{money(closing)}</p>
+      <p className="mt-1 text-xs tabular-nums text-slate-500">
+        {money(opening)} brought forward <span className={IN}>+ {money(came)}</span> <span className={OUT}>− {money(went)}</span>
+      </p>
+      <p className="mt-0.5 text-xs text-slate-500 print:hidden">{hint}</p>
+    </div>
   );
 }
