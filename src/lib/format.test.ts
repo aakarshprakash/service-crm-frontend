@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { label, qty, toMajor, toMinor } from './format';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { configureFormatting, daysFromToday, label, qty, toMajor, toMinor } from './format';
 import { safeNext } from './utils';
 
 describe('money conversion (API uses integer paise)', () => {
@@ -39,5 +39,26 @@ describe('safeNext (open-redirect protection)', () => {
 
   it.each(['https://evil.test', '//evil.test', '/\\evil.test', 'javascript:alert(1)', 'jobs', null])('rejects %s', (value) => {
     expect(safeNext(value, '/home')).toBe('/home');
+  });
+});
+
+describe('daysFromToday (calendar days in the company time zone)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    configureFormatting({});
+  });
+
+  it('counts calendar days, not 24-hour blocks', () => {
+    configureFormatting({ timezone: 'Asia/Kolkata' });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-09T17:00:00Z')); // 9 Nov, 10:30 pm IST
+    expect(daysFromToday('2026-11-09T04:00:00Z')).toBe(0); // earlier the same day
+    expect(daysFromToday('2026-11-09T19:00:00Z')).toBe(1); // 10 Nov, 12:30 am IST
+    expect(daysFromToday('2026-11-12T09:30:00Z')).toBe(3);
+    expect(daysFromToday('2026-11-07T09:30:00Z')).toBe(-2);
+  });
+
+  it('returns null without a date', () => {
+    expect(daysFromToday(null)).toBeNull();
   });
 });
