@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,8 @@ interface NavChild {
   label: string;
   show: boolean;
   end?: boolean;
+  /** A small heading shown above the first item of each group inside the sub-menu. */
+  group?: string;
 }
 
 interface NavItem {
@@ -95,15 +97,18 @@ function useNav(): NavSection[] {
           icon: icon(Landmark),
           show: accounts || can('cash.verify'),
           children: [
+            // In the order a day goes: see where things stand, check the day, then money in, money out, and the books.
             { to: '/accounts', label: t('nav.accountsOverview'), show: accounts, end: true },
-            { to: '/accounts/receivables', label: t('nav.receivables'), show: accounts },
-            { to: '/accounts/receipts', label: t('nav.receipts'), show: can('payments.record') },
-            { to: '/accounts/expenses', label: t('nav.expenses'), show: can('expenses.manage') },
-            { to: '/accounts/expense-claims', label: t('nav.expenseClaims'), show: can('expenses.manage') },
-            { to: '/accounts/cash-bank', label: t('nav.cashBank'), show: accounts },
-            { to: '/accounts/books', label: t('nav.dayBook'), show: accounts },
-            { to: '/accounts/profit-loss', label: t('nav.profitLoss'), show: accounts },
-            { to: '/accounts/cash-close', label: t('nav.cashClose'), show: can('cash.verify') },
+            { to: '/accounts/register', label: t('nav.dailyRegister'), show: accounts, group: t('nav.groupDaily') },
+            { to: '/accounts/cash-close', label: t('nav.cashClose'), show: can('cash.verify'), group: t('nav.groupDaily') },
+            { to: '/accounts/receipts', label: t('nav.receipts'), show: can('payments.record'), group: t('nav.groupIn') },
+            { to: '/accounts/income', label: t('nav.income'), show: can('expenses.manage'), group: t('nav.groupIn') },
+            { to: '/accounts/receivables', label: t('nav.receivables'), show: accounts, group: t('nav.groupIn') },
+            { to: '/accounts/expenses', label: t('nav.expenses'), show: can('expenses.manage'), group: t('nav.groupOut') },
+            { to: '/accounts/expense-claims', label: t('nav.expenseClaims'), show: can('expenses.manage'), group: t('nav.groupOut') },
+            { to: '/accounts/cash-bank', label: t('nav.cashBank'), show: accounts, group: t('nav.groupReports') },
+            { to: '/accounts/books', label: t('nav.dayBook'), show: accounts, group: t('nav.groupReports') },
+            { to: '/accounts/profit-loss', label: t('nav.profitLoss'), show: accounts, group: t('nav.groupReports') },
           ],
         },
       ],
@@ -206,9 +211,10 @@ function NavGroup({ item, collapsed, onExpand }: { item: NavItem; collapsed: boo
       </button>
       {open && (
         <div className="mb-1 ml-[1.32rem] mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
-          {children.map((c) => (
+          {children.map((c, i) => (
+            <Fragment key={c.to}>
+            {c.group && c.group !== children[i - 1]?.group && <p className="px-3 pb-0.5 pt-2.5 text-[11px] font-medium text-slate-500">{c.group}</p>}
             <NavLink
-              key={c.to}
               to={c.to}
               end={c.end}
               className={({ isActive }) =>
@@ -217,6 +223,7 @@ function NavGroup({ item, collapsed, onExpand }: { item: NavItem; collapsed: boo
             >
               {c.label}
             </NavLink>
+            </Fragment>
           ))}
         </div>
       )}
@@ -363,7 +370,7 @@ export function AppShell() {
         </div>
       )}
 
-      <div className={cn('transition-[padding] duration-200', collapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
+      <div className={cn('transition-[padding] duration-200 print:!pl-0', collapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
         {user?.impersonating && (
           <div className="flex items-center justify-center gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
             {t('shell.impersonating', { name: user.name, company: user.tenant?.name })}

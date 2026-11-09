@@ -49,7 +49,8 @@ export default function TechJobDetail() {
           ) : (
             <>
               <JobInfo job={job} />
-              {['open', 'pending', 'part_pending'].includes(job.status) && (
+              {job.needs_resume_approval && <ResumeGate job={job} />}
+              {['open', 'pending', 'part_pending'].includes(job.status) && !job.needs_resume_approval && (
                 <div className="sticky bottom-20 z-10 lg:bottom-4">
                   <Hint block text={t('job.startHint')}>
                     <Button size="lg" className="w-full shadow-lg" icon={<Wrench className="h-5 w-5" />} onClick={() => setStarting(true)}>
@@ -145,6 +146,24 @@ function JobInfo({ job }: { job: Job }) {
         <MapEmbed lat={c?.lat} lng={c?.lng} />
       </Card>
     </>
+  );
+}
+
+/** Left pending: the job stays with the technician, but the office approves the next visit. */
+function ResumeGate({ job }: { job: Job }) {
+  const { t } = useTranslation();
+  const m = useApiMutation(() => api.post(`/jobs/${job.id}/resume-request`), { invalidate: [['tech-job', String(job.id)]], success: t('job.resumeSent') });
+  return (
+    <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <p className="font-medium">{t('job.resumeWaiting', { status: label(job.status).toLowerCase() })}</p>
+      {job.resume_requested_at ? (
+        <p>{t('job.resumeAsked', { when: dateTime(job.resume_requested_at) })}</p>
+      ) : (
+        <Button size="sm" variant="secondary" loading={m.isPending} onClick={() => m.mutate(undefined)}>
+          {t('job.resumeAsk')}
+        </Button>
+      )}
+    </div>
   );
 }
 

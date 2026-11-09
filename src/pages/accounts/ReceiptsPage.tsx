@@ -18,8 +18,8 @@ export default function ReceiptsPage() {
   return (
     <>
       <PageHeader
-        title="Receipts"
-        description="Every payment received — at the office, by technicians in the field and online."
+        title="Money received"
+        description="Every payment customers made against a bill: at the office, to technicians on site, and online."
         actions={
           <Link to={`/reports?report=receipts`}>
             <Button variant="secondary">Export</Button>

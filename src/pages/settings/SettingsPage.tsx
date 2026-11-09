@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDown, ArrowUp, Building2, Camera, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Trash2, Upload, Wallet, Wrench,
+  ArrowDown, ArrowUp, Building2, Camera, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Smartphone, Trash2, Upload, Wallet, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GSTIN_PATTERN, PAN_PATTERN } from '@/lib/india';
@@ -47,8 +47,11 @@ interface SettingsData {
     tutorial_mode: boolean;
     auto_assign_max_jobs: number;
     auto_assign_on_duty_only: boolean;
-    attendance: { geofence: 'off' | 'flag' | 'enforce'; geofence_technicians: boolean; require_location: boolean };
-    jobs?: { require_signature: boolean; require_punch_in?: boolean; age_warning?: number; age_old?: number; age_critical?: number };
+    attendance: { geofence: 'off' | 'flag' | 'enforce'; geofence_technicians: boolean; require_location: boolean; auto_punch_out_at?: string | null };
+    jobs?: {
+      require_signature: boolean; require_punch_in?: boolean; age_warning?: number; age_old?: number; age_critical?: number;
+      resume_needs_approval?: boolean; auto_close_visits_at?: string | null; tech_hide_closed_after_days?: number;
+    };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -544,6 +547,23 @@ function SettingRow({ title, desc, checked, onChange, disabled, note }: { title:
   );
 }
 
+/** A switch that, when on, takes a time of day (company time). Off saves null. */
+function TimeSettingRow({ title, desc, value, onChange, fallback, error }: { title: string; desc: string; value: string | null | undefined; onChange: (v: string | null) => void; fallback: string; error?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-4 first:pt-0 last:pb-0">
+      <div>
+        <p className="text-sm font-medium text-slate-900">{title}</p>
+        <p className="mt-0.5 text-sm text-slate-500">{desc}</p>
+        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        {value && <Input type="time" className="w-32" aria-label={`${title} time`} value={value} invalid={!!error} onChange={(ev) => onChange(ev.target.value || fallback)} />}
+        <Toggle checked={!!value} onChange={(on) => onChange(on ? fallback : null)} label={title} />
+      </div>
+    </div>
+  );
+}
+
 /** A titled group of settings with an icon. */
 function SettingGroup({ icon, title, desc, children }: { icon: ReactNode; title: string; desc: string; children: ReactNode }) {
   return (
@@ -712,6 +732,42 @@ function Preferences({ data }: { data: SettingsData }) {
         />
       </SettingGroup>
 
+      <SettingGroup icon={<Smartphone className="h-4 w-4" />} title="Technician app" desc="What technicians can do with their jobs, and what is tidied up at the end of the day.">
+        <SettingRow
+          title="Approval to go back to a pending job"
+          desc="A job left pending or part pending stays with its technician, but they can only start the next visit once someone approves it on the job page. Marking a part received also approves it."
+          checked={s.jobs?.resume_needs_approval ?? true}
+          onChange={(v) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, resume_needs_approval: v } })}
+        />
+        <TimeSettingRow
+          title="Close visits left running"
+          desc="A visit still running at this time is closed as pending with the remark “Auto closed”. Its photos and parts are kept, and nothing is billed."
+          value={s.jobs?.auto_close_visits_at}
+          fallback="22:00"
+          error={e('jobs.auto_close_visits_at')}
+          onChange={(v) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, auto_close_visits_at: v } })}
+        />
+        <div className="flex items-start justify-between gap-6 py-4 last:pb-0">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Remove closed jobs from the app after</p>
+            <p className="mt-0.5 text-sm text-slate-500">Completed and cancelled jobs leave the technician’s list after this many days. They stay on record here. 0 keeps them.</p>
+            {e('jobs.tech_hide_closed_after_days') && <p className="mt-1 text-xs text-red-600">{e('jobs.tech_hide_closed_after_days')}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              max={365}
+              className="w-20"
+              aria-label="Days before closed jobs leave the app"
+              value={s.jobs?.tech_hide_closed_after_days ?? 2}
+              onChange={(ev) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, tech_hide_closed_after_days: Math.max(0, Number(ev.target.value)) } })}
+            />
+            <span className="text-sm text-slate-500">days</span>
+          </div>
+        </div>
+      </SettingGroup>
+
       <SettingGroup icon={<MessageSquareText className="h-4 w-4" />} title="Customers" desc="Messages customers receive and their self-service portal.">
         <SettingRow title="SMS updates" desc="Job booked, technician on the way, job done and payment received." checked={s.notifications.sms} onChange={(v) => setS({ ...s, notifications: { ...s.notifications, sms: v } })} disabled={!data.features.sms} note={!data.features.sms ? notInPlan : undefined} />
         <SettingRow
@@ -795,6 +851,14 @@ function Preferences({ data }: { data: SettingsData }) {
           checked={!!s.attendance?.require_location}
           onChange={(v) => setS({ ...s, attendance: { ...s.attendance, require_location: v } })}
         />
+        <TimeSettingRow
+          title="Punch out anyone who forgot"
+          desc="Anyone still punched in at this time is punched out, recorded at this time and marked “auto”. They get a notification, and you can correct the day in the register."
+          value={s.attendance?.auto_punch_out_at}
+          fallback="21:00"
+          error={e('attendance.auto_punch_out_at')}
+          onChange={(v) => setS({ ...s, attendance: { ...s.attendance, auto_punch_out_at: v } })}
+        />
         <details className="group py-4 last:pb-0">
           <summary className="cursor-pointer list-none text-sm font-medium text-brand-700 hover:underline">What this means for your staff ›</summary>
           <PunchRules attendance={s.attendance} punchBeforeVisit={s.jobs?.require_punch_in ?? true} />
@@ -826,6 +890,7 @@ const MASTER_TYPES = [
   { key: 'branches', label: 'Branches', hint: 'Service centres / warehouses holding stock.' },
   { key: 'service-locations', label: 'Service locations', hint: 'Areas you serve. Link technicians to each one so new jobs there can be auto-assigned.' },
   { key: 'expense-categories', label: 'Expense categories', hint: 'Heads for recording expenses, e.g. Fuel, Rent, Salaries.' },
+  { key: 'income-categories', label: 'Income categories', hint: 'Kinds of money received without an invoice, e.g. Service charge (no bill), Scrap sale, Commission.' },
   { key: 'upi-accounts', label: 'UPI accounts', hint: 'UPI IDs you collect into. They are printed as a “scan to pay” QR on invoices and shown to technicians when collecting.' },
   { key: 'shifts', label: 'Shifts', hint: 'Working hours. Set a company default, and give staff their own under HR → Employees. Used to flag late arrival, early leaving and extra time; pay is not affected.' },
   { key: 'leave-types', label: 'Leave types', hint: 'Types of leave staff can apply for, with a yearly quota (0 = not tracked). Unpaid leave is deducted in payroll.' },

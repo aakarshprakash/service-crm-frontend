@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, CalendarClock, Check, CheckCircle2, ClipboardList, Printer, CornerDownRight, FileText, MapPin, Package, PackageCheck, PackageSearch, Pencil, Phone, Repeat2, User, UserCog, Wrench, XCircle,
+  ArrowLeft, CalendarClock, Check, CheckCircle2, ClipboardList, Printer, CornerDownRight, FileText, Hourglass, MapPin, Package, PackageCheck, PackageSearch, Pencil, Phone, Repeat2, User, UserCog, Wrench, XCircle,
 } from 'lucide-react';
 import { api, ApiError, imageObjectUrl, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
@@ -102,7 +102,7 @@ export default function JobDetail() {
   const [params, setParams] = useSearchParams();
   const justCreated = params.get('created') === '1';
   const q = useQuery({ queryKey: ['job', id], queryFn: () => api.get<Envelope<Job>>(`/jobs/${id}`).then((r) => r.data) });
-  const [dialog, setDialog] = useState<'edit' | 'assign' | 'reschedule' | 'part' | 'cancel' | 'approve-cancel' | 'reject-cancel' | 'followup' | 'model' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'assign' | 'reschedule' | 'part' | 'cancel' | 'approve-cancel' | 'reject-cancel' | 'reject-resume' | 'followup' | 'model' | null>(null);
   const job = q.data;
   const manage = can('jobs.manage') && job && !['completed', 'cancelled'].includes(job.status);
   // While a technician's cancellation waits for an admin, the only thing to do with the job is decide.
@@ -115,6 +115,7 @@ export default function JobDetail() {
   const inv = job?.invoice;
   const { print, printing } = usePrintJobCard(job?.id);
   const received = useApiMutation(() => api.post(`/jobs/${id}/part-received`), { invalidate: [['job', String(id)], ['jobs']] });
+  const resume = useApiMutation(() => api.post(`/jobs/${id}/resume/approve`), { invalidate: [['job', String(id)], ['jobs']] });
 
   return (
     <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
@@ -227,6 +228,35 @@ export default function JobDetail() {
                 </div>
               ) : (
                 <p className="text-sm font-medium text-red-900">Waiting for an admin, coordinator or head engineer to decide.</p>
+              )}
+            </div>
+          )}
+
+          {job.needs_resume_approval && (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <Hourglass className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                <div className="min-w-0 text-sm">
+                  <p className="font-semibold text-amber-900">
+                    {job.resume_requested_at
+                      ? `${job.technician?.name ?? 'The technician'} asked to go back to this job on ${dateTime(job.resume_requested_at)}`
+                      : `Left ${label(job.status).toLowerCase()}:${job.technician?.name ?? 'the technician'} needs approval before the next visit`}
+                  </p>
+                  {job.resume_request_note && <p className="break-words text-amber-800">“{job.resume_request_note}”</p>}
+                  {!job.resume_requested_at && <p className="text-amber-800">The job stays assigned to them. Approve when it can go ahead.</p>}
+                </div>
+              </div>
+              {can('jobs.approve_resume') ? (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setDialog('reject-resume')}>
+                    Not yet
+                  </Button>
+                  <Button size="sm" loading={resume.isPending} onClick={() => resume.mutate(undefined)}>
+                    Approve to resume
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-amber-900">Waiting for an admin, coordinator or head engineer.</p>
               )}
             </div>
           )}
@@ -556,6 +586,7 @@ export default function JobDetail() {
           {dialog === 'cancel' && <CancelDialog job={job} onClose={() => setDialog(null)} />}
           {dialog === 'approve-cancel' && <CancelDialog job={job} approving onClose={() => setDialog(null)} />}
           {dialog === 'reject-cancel' && <RejectCancelDialog job={job} onClose={() => setDialog(null)} />}
+          {dialog === 'reject-resume' && <RejectResumeDialog job={job} onClose={() => setDialog(null)} />}
           <FollowUpDialog job={job} open={dialog === 'followup'} onClose={() => setDialog(null)} />
         </>
       )}
@@ -911,6 +942,34 @@ function RejectCancelDialog({ job, onClose }: { job: Job; onClose: () => void })
     >
       <Field label="Why does the job stay open?" required error={fieldError(m.error, 'note') ?? fieldError(m.error, 'status')}>
         <Textarea autoFocus rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Customer still wants the repair" />
+      </Field>
+    </Modal>
+  );
+}
+
+/** The job stays pending with its technician; they're told why they can't go back yet. */
+function RejectResumeDialog({ job, onClose }: { job: Job; onClose: () => void }) {
+  const [note, setNote] = useState('');
+  const m = useApiMutation((body: object) => api.post(`/jobs/${job.id}/resume/reject`, body), { toastValidation: false, invalidate: [['job', String(job.id)], ['jobs']], onSuccess: onClose });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Not ready to resume?"
+      description="The job stays pending with the same technician, and they’re told why."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Go back
+          </Button>
+          <Button loading={m.isPending} disabled={!note.trim()} onClick={() => m.mutate({ note: note.trim() })}>
+            Tell the technician
+          </Button>
+        </>
+      }
+    >
+      <Field label="Why not yet?" required error={fieldError(m.error, 'note') ?? fieldError(m.error, 'status')}>
+        <Textarea autoFocus rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. The part arrives on Monday" />
       </Field>
     </Modal>
   );

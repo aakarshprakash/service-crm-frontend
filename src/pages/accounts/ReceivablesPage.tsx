@@ -29,7 +29,7 @@ export default function ReceivablesPage() {
 
   return (
     <>
-      <PageHeader title="Receivables" description="Outstanding balances by customer, aged from the invoice date. Click a customer to see their invoices." />
+      <PageHeader title="Customer dues" description="Customers who still owe money, and for how long. Click a customer to see their bills and collect." />
       <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
         {t && (
           <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">

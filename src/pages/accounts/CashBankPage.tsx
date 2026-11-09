@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, Navigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftRight, Landmark, Settings2, Trash2 } from 'lucide-react';
 import { api, type Envelope, type Paginated } from '@/lib/api';
@@ -14,7 +14,7 @@ import { Hint } from '@/components/tutorial';
 import { PeriodFilter, usePeriod } from '@/components/period';
 
 type Book = 'cash' | 'bank';
-interface LedgerEntry { at: string; type: 'receipt' | 'expense' | 'transfer'; ref: string | null; particulars: string; method: string; link: { invoice_id?: number; expense_id?: number; transfer_id?: number }; in: number; out: number; balance: number }
+interface LedgerEntry { at: string; type: 'receipt' | 'expense' | 'transfer' | 'income' | 'adjustment'; ref: string | null; particulars: string; method: string; link: { invoice_id?: number; expense_id?: number; transfer_id?: number }; in: number; out: number; balance: number }
 interface Ledger { book: Book; from: string; to: string; opening: number; entries: LedgerEntry[]; total_in: number; total_out: number; closing: number; opening_settings: { date: string | null; cash: number; bank: number } }
 interface Transfer { id: number; transfer_date: string; direction: 'cash_to_bank' | 'bank_to_cash'; amount: number; reference_no: string | null; notes: string | null; creator?: Named | null }
 
@@ -22,17 +22,21 @@ interface Transfer { id: number; transfer_date: string; direction: 'cash_to_bank
 export default function CashBankPage() {
   const state = usePeriod();
   const { params, set } = state;
-  const tab = (params.get('book') as Book | 'transfers') || 'cash';
+  const book = params.get('book');
+  const tab = (book as Book | 'transfers') || 'cash';
   const { can } = useAuth();
   const manage = can('expenses.manage');
   const [transfer, setTransfer] = useState(false);
   const [opening, setOpening] = useState(params.get('opening') === '1');
 
+  // The daily register has its own page now; old links still land on it.
+  if (book === 'register') return <Navigate to={`/accounts/register${params.get('day') ? `?day=${params.get('day')}` : ''}`} replace />;
+
   return (
     <>
       <PageHeader
-        title="Cash & bank"
-        description="Running balances of office cash and your bank / UPI account. Receipts and expenses post here automatically by payment method."
+        title="Cash & bank balance"
+        description="How much is in the office cash and in your bank / UPI account, entry by entry. Money received and expenses are added here by themselves."
         actions={
           manage && (
             <>
@@ -104,7 +108,7 @@ function LedgerView({ book, period }: { book: Book; period: { from: string; to: 
                         )}
                       </p>
                       <p className="text-xs capitalize text-slate-500">
-                        {e.type}
+                        {e.type === 'adjustment' ? 'Office day close' : e.type}
                         {e.ref && ` · ${e.ref}`}
                       </p>
                     </div>

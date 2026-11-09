@@ -47,8 +47,8 @@ export default function BooksPage() {
   return (
     <>
       <PageHeader
-        title="Day book"
-        description="Every rupee in and out, in order — plus a daily income vs expenses view."
+        title="All transactions"
+        description="Every rupee that came in or went out, in date order, with a day-by-day total."
         actions={
           <Link to="/reports?report=day-book" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline">
             <FileBarChart className="h-4 w-4" /> Export reports
@@ -133,6 +133,7 @@ function Summary({ period }: { period: Period }) {
                 rows={[
                   ['Service jobs', s.income_by_source.job],
                   ['Walk-in sales', s.income_by_source.walk_in],
+                  ['Other income (no invoice)', s.income_by_source.other ?? 0],
                 ]}
                 total={s.income}
                 color={INCOME}
