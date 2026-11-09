@@ -88,6 +88,24 @@ export function today(offsetDays = 0): string {
   return parts; // en-CA gives YYYY-MM-DD
 }
 
+/** Calendar day (YYYY-MM-DD) of a timestamp in the tenant timezone. */
+function calendarDay(value: string | Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+}
+
+/** Calendar days from today to a timestamp in the tenant timezone: 0 today, 1 tomorrow, -1 yesterday. */
+export function daysFromToday(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const toUtc = (day: string) => Date.parse(`${day}T00:00:00Z`);
+  return Math.round((toUtc(calendarDay(value)) - toUtc(calendarDay(new Date()))) / 86400000);
+}
+
+/** Pieces of a date for a calendar-style tile: "Nov", "09", "Mon". */
+export function dateParts(value: string): { month: string; day: string; weekday: string } {
+  const f = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(dateLocale(), { ...o, timeZone }).format(new Date(value));
+  return { month: f({ month: 'short' }), day: f({ day: '2-digit' }), weekday: f({ weekday: 'short' }) };
+}
+
 export function monthStart(): string {
   return today().slice(0, 8) + '01';
 }
