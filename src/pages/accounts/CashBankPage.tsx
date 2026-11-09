@@ -14,7 +14,7 @@ import { Hint } from '@/components/tutorial';
 import { PeriodFilter, usePeriod } from '@/components/period';
 
 type Book = 'cash' | 'bank';
-interface LedgerEntry { at: string; type: 'receipt' | 'expense' | 'transfer'; ref: string | null; particulars: string; method: string; link: { invoice_id?: number; expense_id?: number; transfer_id?: number }; in: number; out: number; balance: number }
+interface LedgerEntry { at: string; type: 'receipt' | 'expense' | 'transfer' | 'income' | 'adjustment'; ref: string | null; particulars: string; method: string; link: { invoice_id?: number; expense_id?: number; transfer_id?: number }; in: number; out: number; balance: number }
 interface Ledger { book: Book; from: string; to: string; opening: number; entries: LedgerEntry[]; total_in: number; total_out: number; closing: number; opening_settings: { date: string | null; cash: number; bank: number } }
 interface Transfer { id: number; transfer_date: string; direction: 'cash_to_bank' | 'bank_to_cash'; amount: number; reference_no: string | null; notes: string | null; creator?: Named | null }
 
@@ -108,7 +108,7 @@ function LedgerView({ book, period }: { book: Book; period: { from: string; to: 
                         )}
                       </p>
                       <p className="text-xs capitalize text-slate-500">
-                        {e.type}
+                        {e.type === 'adjustment' ? 'Office day close' : e.type}
                         {e.ref && ` · ${e.ref}`}
                       </p>
                     </div>
