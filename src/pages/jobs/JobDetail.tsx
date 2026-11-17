@@ -344,8 +344,7 @@ function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
 
   if (job.status !== 'completed' && !job.review && !job.feedback_taken_at) return null;
 
-  const taken = !!job.feedback_taken_at;
-  // Same rule as the Jobs list badge: both the code and the remarks (or a portal rating) make it collected.
+  // Same rule as the Jobs list badge and filter: collected once staff marked it or the customer rated it.
   const pending = !isFeedbackCollected(job);
   // Has anything changed from what was saved?
   const dirty = code.trim() !== (job.customer_satisfaction_code ?? '') || note.trim() !== (job.feedback_note ?? '');
@@ -367,7 +366,7 @@ function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
               </p>
             </div>
           )}
-          <Field label="Customer Satisfaction Code" hint={!taken ? 'The technician may have entered this during the visit.' : undefined} error={fieldError(m.error, 'customer_satisfaction_code')}>
+          <Field label="Customer Satisfaction Code" hint={pending ? 'The technician may have entered this during the visit.' : undefined} error={fieldError(m.error, 'customer_satisfaction_code')}>
             <Input maxLength={50} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SAT12345" />
           </Field>
           <Field label="Feedback / remarks" error={fieldError(m.error, 'note')}>
@@ -378,7 +377,7 @@ function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
               Collected {dateTime(job.feedback_taken_at)}{job.feedback_taker ? ` by ${job.feedback_taker.name}` : ''}
             </p>
           )}
-          <Button size="sm" loading={m.isPending} disabled={!dirty && taken} onClick={() => m.mutate({ customer_satisfaction_code: code.trim() || null, note: note.trim() || null })}>
+          <Button size="sm" loading={m.isPending} disabled={!dirty && !pending} onClick={() => m.mutate({ customer_satisfaction_code: code.trim() || null, note: note.trim() || null })}>
             {pending ? 'Mark feedback collected' : 'Update feedback'}
           </Button>
         </div>
