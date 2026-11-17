@@ -9,7 +9,7 @@ import { date, dateTime, duration, label, money, qty } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Estimate, Job, Visit } from '@/lib/types';
 import { Badge, Button, Card, Field, Input, PageHeader, QueryState, Textarea, toast } from '@/components/ui';
-import { MethodLabel, PriorityBadge, StatusBadge, Stars, WarrantyBadge } from '@/components/domain';
+import { MethodLabel, PriorityBadge, StatusBadge, Stars, WarrantyBadge, isFeedbackCollected } from '@/components/domain';
 import { CustomerLocationCard } from '@/components/CustomerLocation';
 import { RichTextView } from '@/components/RichText';
 import { Hint } from '@/components/tutorial';
@@ -345,6 +345,8 @@ function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
   if (job.status !== 'completed' && !job.review && !job.feedback_taken_at) return null;
 
   const taken = !!job.feedback_taken_at;
+  // Same rule as the Jobs list badge: both the code and the remarks (or a portal rating) make it collected.
+  const pending = !isFeedbackCollected(job);
   // Has anything changed from what was saved?
   const dirty = code.trim() !== (job.customer_satisfaction_code ?? '') || note.trim() !== (job.feedback_note ?? '');
 
@@ -358,7 +360,7 @@ function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
       )}
       {canMark ? (
         <div className="space-y-4">
-          {!taken && (
+          {pending && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
                 <MessageSquareWarning className="h-4 w-4 shrink-0" /> Feedback not collected
@@ -371,18 +373,18 @@ function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
           <Field label="Feedback / remarks" error={fieldError(m.error, 'note')}>
             <Textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What did the customer say?" />
           </Field>
-          {taken && job.feedback_taken_at && (
+          {!pending && job.feedback_taken_at && (
             <p className="text-xs text-slate-500">
               Collected {dateTime(job.feedback_taken_at)}{job.feedback_taker ? ` by ${job.feedback_taker.name}` : ''}
             </p>
           )}
           <Button size="sm" loading={m.isPending} disabled={!dirty && taken} onClick={() => m.mutate({ customer_satisfaction_code: code.trim() || null, note: note.trim() || null })}>
-            {taken ? 'Update feedback' : 'Mark feedback collected'}
+            {pending ? 'Mark feedback collected' : 'Update feedback'}
           </Button>
         </div>
       ) : (
         <div className="space-y-2 text-sm">
-          {job.feedback_pending ? (
+          {pending ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
                 <MessageSquareWarning className="h-4 w-4 shrink-0" /> Feedback not collected

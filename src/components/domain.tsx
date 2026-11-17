@@ -68,12 +68,21 @@ export function WarrantyBadge({ unit, className }: { unit: { under_warranty?: bo
   );
 }
 
-export function FeedbackBadge({ job }: { job: { status: string; feedback_pending?: boolean; customer_satisfaction_code?: string | null; feedback_note?: string | null } }) {
+type FeedbackFields = { status: string; customer_satisfaction_code?: string | null; feedback_note?: string | null; review?: unknown };
+
+/**
+ * A completed job's feedback is collected only when both the customer's code and the office's remarks are in,
+ * or the customer rated it on the portal. Anything else is still pending, including jobs completed before
+ * feedback was tracked (the server marks those as taken so they stay out of the technician app, but nothing was recorded).
+ */
+export function isFeedbackCollected(job: FeedbackFields): boolean {
+  return !!(job.customer_satisfaction_code && job.feedback_note) || !!job.review;
+}
+
+export function FeedbackBadge({ job }: { job: FeedbackFields }) {
   if (job.status !== 'completed') return null;
-  // Collected only when both the customer's code and the office's remarks are in.
-  if (job.customer_satisfaction_code && job.feedback_note) return <Badge tone="green"><CheckCircle2 className="h-3 w-3" />Feedback collected</Badge>;
-  if (job.feedback_pending) return <Badge tone="amber"><MessageSquareWarning className="h-3 w-3" />Feedback pending</Badge>;
-  return null;
+  if (isFeedbackCollected(job)) return <Badge tone="green"><CheckCircle2 className="h-3 w-3" />Feedback collected</Badge>;
+  return <Badge tone="amber"><MessageSquareWarning className="h-3 w-3" />Feedback pending</Badge>;
 }
 
 export const JOB_STATUSES: JobStatus[] =['open', 'in_progress', 'pending', 'part_pending', 'cancel_requested', 'completed', 'cancelled'];
