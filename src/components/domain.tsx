@@ -68,15 +68,16 @@ export function WarrantyBadge({ unit, className }: { unit: { under_warranty?: bo
   );
 }
 
-type FeedbackFields = { status: string; customer_satisfaction_code?: string | null; feedback_note?: string | null; review?: unknown };
+type FeedbackFields = { status: string; feedback_taken_by?: number | null; review?: unknown };
 
 /**
- * A completed job's feedback is collected only when both the customer's code and the office's remarks are in,
- * or the customer rated it on the portal. Anything else is still pending, including jobs completed before
- * feedback was tracked (the server marks those as taken so they stay out of the technician app, but nothing was recorded).
+ * A completed job's feedback is collected once a staff member has marked it (feedback_taken_by) or the customer
+ * rated it on the portal. Anything else is still pending: a code the technician typed on site isn't enough, and
+ * neither are jobs completed before feedback was tracked (the server stamps those as taken so they stay out of the
+ * technician app, but nothing was recorded). Matches the server's "Feedback pending" filter.
  */
 export function isFeedbackCollected(job: FeedbackFields): boolean {
-  return !!(job.customer_satisfaction_code && job.feedback_note) || !!job.review;
+  return !!job.feedback_taken_by || !!job.review;
 }
 
 export function FeedbackBadge({ job }: { job: FeedbackFields }) {

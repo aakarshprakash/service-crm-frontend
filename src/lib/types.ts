@@ -346,6 +346,8 @@ export interface Job {
   customer_satisfaction_code?: string | null;
   /** When the customer's feedback was taken (their code, a portal rating, or the office's tick). */
   feedback_taken_at?: string | null;
+  /** The staff member who marked the feedback collected; empty for older jobs and portal ratings. */
+  feedback_taken_by?: number | null;
   feedback_note?: string | null;
   feedback_taker?: Named | null;
   /** Completed, with the customer's feedback still to come: the job stays in the technician's app. */
