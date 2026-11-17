@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Copy, Download, HandCoins, QrCode, ReceiptText, Send } from 'lucide-react';
 import { UpiQrDialog } from '@/components/upi';
@@ -11,10 +11,13 @@ import type { Invoice } from '@/lib/types';
 import { Badge, Button, Card, DataTable, Field, Input, Modal, PageHeader, QueryState, Select, Textarea, toast } from '@/components/ui';
 import { MethodLabel, StatusBadge } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
+import { HardDeleteButton, useHardDelete } from '@/components/HardDelete';
 
 export default function InvoiceDetail() {
   const { id } = useParams();
   const { can, user } = useAuth();
+  const navigate = useNavigate();
+  const hardDelete = useHardDelete();
   const q = useQuery({ queryKey: ['invoice', id], queryFn: () => api.get<Envelope<Invoice>>(`/invoices/${id}`).then((r) => r.data) });
   const [paying, setPaying] = useState(false);
   const [showUpi, setShowUpi] = useState(false);
@@ -47,6 +50,7 @@ export default function InvoiceDetail() {
             }
             actions={
               <>
+                {inv.source === 'walk_in' && <HardDeleteButton type="invoice" id={inv.id} label="Delete bill" onDeleted={() => navigate('/invoices', { replace: true })} />}
                 {can('invoices.change_bill_type') && (inv.is_gst || lookups?.billing.gst_registered) && (
                   <Hint text="Switches this bill between GST and non-GST. The total stays the same.">
                     <Button variant="secondary" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setChangingType(true)}>
@@ -181,6 +185,7 @@ export default function InvoiceDetail() {
                     { key: 'by', header: 'Collected by', hideOnMobile: true, render: (p) => p.collector?.name ?? 'Office' },
                     { key: 'status', header: 'Status', render: (p) => <StatusBadge status={p.status} /> },
                     { key: 'amt', header: 'Amount', render: (p) => money(p.amount), className: 'text-right tabular-nums', headerClassName: 'text-right' },
+                    ...(hardDelete ? [{ key: 'del', header: '', className: 'text-right', render: (p: { id: number }) => <HardDeleteButton compact type="payment" id={p.id} label="Delete receipt permanently" /> }] : []),
                   ]}
                 />
               </Card>

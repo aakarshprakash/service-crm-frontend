@@ -339,6 +339,7 @@ export function CancelDialog({ job, approving = false, onClose }: { job: Job; ap
   );
 }
 
+
 /** Keeps the job open: it goes back to Pending and the technician sees why. */
 export function RejectCancelDialog({ job, onClose }: { job: Job; onClose: () => void }) {
   const [note, setNote] = useState('');

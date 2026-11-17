@@ -221,6 +221,17 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
     ],
   },
   {
+    id: 'hr-trips',
+    pattern: '/hr/trips',
+    title: 'Trips',
+    intro: 'Where each technician went on a day: their stops in order, the distance between them and the time at each customer.',
+    points: [
+      'It is built from punches and visits, so technicians enter nothing extra.',
+      'Distance is a straight line between stops; the road distance is usually longer.',
+      'Choose a longer period to total the distance per technician, e.g. for fuel payments.',
+    ],
+  },
+  {
     id: 'hr-attendance',
     pattern: '/hr/attendance',
     title: 'Attendance register',
@@ -260,14 +271,14 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
   {
     id: 'my-hr',
     pattern: '/me',
-    title: 'My HR',
+    title: 'My attendance & pay',
     intro: 'Punch in and out, see your attendance, apply for leave and download payslips.',
     points: ['Weekly offs and holidays inside your leave dates aren’t counted against your balance.'],
   },
   {
     id: 'tech-me',
     pattern: '/tech/me',
-    title: 'My HR',
+    title: 'My attendance & pay',
     intro: 'Your attendance calendar, leave and payslips.',
     points: ['Apply for leave here; your manager gets a notification.'],
   },

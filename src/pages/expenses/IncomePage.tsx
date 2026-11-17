@@ -6,6 +6,7 @@ import { date, money, toMajor, toMinor, today } from '@/lib/format';
 import type { ExpenseMethod, Income } from '@/lib/types';
 import { Button, Card, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, StatCard, Textarea } from '@/components/ui';
 import { MethodLabel } from '@/components/domain';
+import { HardDeleteButton } from '@/components/HardDelete';
 
 const METHODS: ExpenseMethod[] = ['cash', 'upi', 'cheque', 'bank_transfer'];
 const methodName = (m: string) => (m === 'bank_transfer' ? 'Bank transfer' : m === 'upi' ? 'UPI' : m[0]!.toUpperCase() + m.slice(1));
@@ -131,6 +132,7 @@ export default function IncomePage() {
                   <Button size="sm" variant="ghost" aria-label="Delete" className="text-red-600" onClick={() => setDeleting(i)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                  <HardDeleteButton compact type="income" id={i.id} label="Delete permanently (even on a closed day)" />
                 </div>
               ),
             },

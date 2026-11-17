@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Columns3, Flag, Hourglass, List, MapPinOff, Plus, Settings2, SlidersHorizontal, UserX, X } from 'lucide-react';
+import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Columns3, Flag, Hourglass, List, MapPinOff, MessageSquareWarning, Plus, Settings2, SlidersHorizontal, UserX, X } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { useListQuery, useLookups, useStaffOptions } from '@/lib/hooks';
@@ -9,7 +9,7 @@ import { date, dateTime, label, time } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { unitLabel, type Job, type JobStatus } from '@/lib/types';
 import { Button, Card, Checkbox, DataTable, EmptyState, Field, Input, PageHeader, Pagination, SearchInput, Select, Tabs } from '@/components/ui';
-import { JOB_STATUSES, PriorityBadge, StatusBadge, ageBand, ageBands, type AgeBand } from '@/components/domain';
+import { FeedbackBadge, JOB_STATUSES, PriorityBadge, StatusBadge, WarrantyBadge, ageBand, ageBands, type AgeBand } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
 
 type View = 'list' | 'board' | 'calendar';
@@ -52,6 +52,7 @@ const QUICK_FILTERS = [
   { value: 'high', label: 'High priority', icon: Flag },
   { value: 'aged', label: 'Old jobs', icon: Hourglass },
   { value: 'no_location', label: 'No location', icon: MapPinOff },
+  { value: 'feedback_pending', label: 'Feedback pending', icon: MessageSquareWarning },
 ] as const;
 
 export default function JobsPage() {
@@ -95,6 +96,7 @@ export default function JobsPage() {
     filters.service_location_id && { key: 'service_location_id', text: `Location: ${filters.service_location_id === 'none' ? 'No location' : named(lookups?.service_locations, filters.service_location_id)}` },
     filters.complaint_type_id && { key: 'complaint_type_id', text: `Complaint: ${named(lookups?.complaint_types, filters.complaint_type_id)}` },
     filters.call_type && { key: 'call_type', text: `Call type: ${label(filters.call_type)}` },
+    filters.warranty && { key: 'warranty', text: filters.warranty === 'under' ? 'Under warranty' : 'Out of warranty' },
     filters.branch_id && { key: 'branch_id', text: `Branch: ${named(lookups?.branches, filters.branch_id)}` },
     filters.from && { key: 'from', text: `Logged from ${date(filters.from)}` },
     filters.to && { key: 'to', text: `Logged to ${date(filters.to)}` },
@@ -276,6 +278,13 @@ export default function JobsPage() {
                   <option value="portal">Customer portal</option>
                 </Select>
               </Field>
+              <Field label="Warranty">
+                <Select value={filters.warranty ?? ''} onChange={(e) => setFilter('warranty', e.target.value)} aria-label="Warranty">
+                  <option value="">Any</option>
+                  <option value="under">Under warranty</option>
+                  <option value="out">Out of warranty</option>
+                </Select>
+              </Field>
               {(lookups?.branches.length ?? 0) > 1 && (
                 <Field label="Branch">
                   <Select value={filters.branch_id ?? ''} onChange={(e) => setFilter('branch_id', e.target.value)} aria-label="Branch">
@@ -331,6 +340,7 @@ export default function JobsPage() {
                         {date(j.created_at)} ·{' '}
                         {ageColours && ageBand(j, bands) ? <span className={cn('rounded px-1.5 py-0.5 font-medium', ageBand(j, bands)!.pill)}>{j.call_age_days}d old</span> : `${j.call_age_days ?? 0}d old`}
                       </p>
+                      <WarrantyBadge unit={j.customer_product} className={cn('mt-1', columns.includes('product') && 'md:hidden')} />
                     </div>
                   ),
                 },
@@ -352,6 +362,7 @@ export default function JobsPage() {
                     <div className="max-w-[16rem]">
                       <p className="truncate">{unitLabel(j.customer_product) || '–'}</p>
                       <p className="truncate text-xs text-slate-500">{[!columns.includes('category') && j.product_category, j.complaint_type?.name ?? j.complaint_details].filter(Boolean).join(' · ')}</p>
+                      <WarrantyBadge unit={j.customer_product} className="mt-1" />
                     </div>
                   ),
                 },
@@ -365,6 +376,7 @@ export default function JobsPage() {
                 { key: 'status', header: 'Status', render: (j) => (
                     <div className="max-w-[11rem]">
                       <StatusBadge status={j.status} />
+                      <FeedbackBadge job={j} />
                       {j.status === 'part_pending' && j.part_pending_note && <p className="mt-1 truncate text-xs text-slate-500" title={j.part_pending_note}>{j.part_pending_note}</p>}
                       {j.status === 'cancel_requested' && j.cancel_reason && <p className="mt-1 truncate text-xs text-slate-500" title={j.cancel_reason}>{j.cancel_reason}</p>}
                     </div>
@@ -502,7 +514,11 @@ function Board({ jobs, loading, total, bands }: { jobs: Job[]; loading: boolean;
                       <span>{j.technician?.name ?? 'Unassigned'}</span>
                       <span>{j.scheduled_at ? dateTime(j.scheduled_at) : ''}</span>
                     </div>
-                    {ageBand(j, bands) && <span className={cn('mt-1.5 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium', ageBand(j, bands)!.pill)}>{j.call_age_days}d old</span>}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
+                      {ageBand(j, bands) && <span className={cn('inline-block rounded px-1.5 py-0.5 text-[11px] font-medium', ageBand(j, bands)!.pill)}>{j.call_age_days}d old</span>}
+                      <WarrantyBadge unit={j.customer_product} />
+                      <FeedbackBadge job={j} />
+                    </div>
                   </Link>
                 ))}
                 {!items.length && <p className="px-1 py-6 text-center text-xs text-slate-400">No jobs</p>}

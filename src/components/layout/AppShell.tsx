@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsFetching, useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, Boxes, Building2, CalendarCheck, ChevronDown, ChevronsLeft, ChevronsRight, ClipboardList, CreditCard, FileBarChart, Gauge, Hammer, Home, Landmark,
+  Bell, Boxes, Building2, CalendarCheck, ChevronDown, ChevronsLeft, ChevronsRight, ClipboardList, CreditCard, FileBarChart, FileSignature, Gauge, Hammer, Home, Landmark,
   LayoutDashboard, LogIn, LogOut, MapPin, Menu, Package, Receipt, Settings, ShieldCheck, Sparkles, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
@@ -12,7 +12,7 @@ import { relative } from '@/lib/format';
 import { useOnline } from '@/lib/hooks';
 import { cn, getPosition } from '@/lib/utils';
 import type { NotificationItem } from '@/lib/types';
-import { Avatar, Button, SearchInput, toast } from '@/components/ui';
+import { Avatar, Button, SearchInput, Spinner, toast } from '@/components/ui';
 import { PageGuide } from '@/components/tutorial';
 import { Logo, LogoMark, PoweredBy } from '@/components/brand';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -90,6 +90,7 @@ function useNav(): NavSection[] {
     {
       label: t('section.finance'),
       items: [
+        { to: '/estimates', label: t('nav.estimates'), icon: icon(FileSignature), show: can('estimates.view') },
         { to: '/invoices', label: t('nav.invoices'), icon: icon(Receipt), show: can('invoices.view') },
         {
           to: '/accounts',
@@ -130,6 +131,7 @@ function useNav(): NavSection[] {
           show: can('hr.view') || can('leave.approve') || can('payroll.manage'),
           children: [
             { to: '/hr', label: t('nav.hrToday'), show: can('hr.view'), end: true },
+            { to: '/hr/trips', label: t('nav.trips'), show: can('hr.view') },
             { to: '/hr/attendance', label: t('nav.attendance'), show: can('hr.view') },
             { to: '/hr/leave', label: t('nav.leave'), show: can('leave.approve') },
             { to: '/hr/employees', label: t('nav.employees'), show: can('payroll.manage') },
@@ -149,6 +151,32 @@ function useNav(): NavSection[] {
       items: [{ to: '/settings', label: t('nav.settings'), icon: icon(Settings), show: can('settings.manage') }],
     },
   ];
+}
+
+/**
+ * A thin moving line under the header while anything is loading or saving. It appears only after a short
+ * delay, so quick requests don't flicker, and tells people the app is working rather than stuck.
+ */
+function ActivityBar() {
+  const busy = useIsFetching() + useIsMutating() > 0;
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!busy) {
+      setShow(false);
+      return;
+    }
+    const t = setTimeout(() => setShow(true), 350);
+    return () => clearTimeout(t);
+  }, [busy]);
+  return (
+    <div className="sticky top-16 z-20 h-0 print:hidden" aria-hidden>
+      {show && (
+        <div className="h-0.5 overflow-hidden bg-brand-100">
+          <div className="h-full w-1/3 animate-activity rounded-full bg-brand-600" />
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Sections with hidden items removed, and empty sections dropped. */
@@ -402,9 +430,19 @@ export function AppShell() {
           </div>
         </header>
 
+        <ActivityBar />
         <main className={cn('mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8', isTech && 'pb-24 lg:pb-6')}>
           <PageGuide />
-          <Outlet />
+          {/* A page's code loads on first visit: the menu and header stay put, only this area waits. */}
+          <Suspense
+            fallback={
+              <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="Loading">
+                <Spinner className="h-7 w-7" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

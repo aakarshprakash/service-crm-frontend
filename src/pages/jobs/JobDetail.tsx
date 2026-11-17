@@ -1,18 +1,20 @@
 import { useState, type ReactNode } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, CornerDownRight, FileText, Pencil, Printer, Repeat2, XCircle } from 'lucide-react';
-import { api, imageObjectUrl, type Envelope } from '@/lib/api';
+import { ArrowLeft, CheckCircle2, CornerDownRight, Download, FileText, MessageSquareWarning, Pencil, Printer, Repeat2, XCircle } from 'lucide-react';
+import { api, download, imageObjectUrl, type Envelope, type Paginated } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { useLookups } from '@/lib/hooks';
+import { fieldError, useApiMutation, useLookups } from '@/lib/hooks';
 import { date, dateTime, duration, label, money, qty } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { Job, Visit } from '@/lib/types';
-import { Badge, Button, Card, PageHeader, QueryState, toast } from '@/components/ui';
-import { MethodLabel, PriorityBadge, StatusBadge, Stars } from '@/components/domain';
+import type { Estimate, Job, Visit } from '@/lib/types';
+import { Badge, Button, Card, Field, Input, PageHeader, QueryState, Textarea, toast } from '@/components/ui';
+import { MethodLabel, PriorityBadge, StatusBadge, Stars, WarrantyBadge } from '@/components/domain';
 import { CustomerLocationCard } from '@/components/CustomerLocation';
 import { RichTextView } from '@/components/RichText';
 import { Hint } from '@/components/tutorial';
+import { HardDeleteButton } from '@/components/HardDelete';
+import { EstimateStatusBadge } from '@/pages/estimates/estimateParts';
 import { JobStatusPanel, type JobDialog } from './JobStatusPanel';
 import {
   AssignDialog, CancelDialog, EditJobDialog, FollowUpDialog, PartPendingDialog, RejectCancelDialog, RejectResumeDialog, RescheduleDialog, SetModelDialog,
@@ -69,6 +71,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
 export default function JobDetail() {
   const { id } = useParams();
   const { can } = useAuth();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const justCreated = params.get('created') === '1';
   const q = useQuery({ queryKey: ['job', id], queryFn: () => api.get<Envelope<Job>>(`/jobs/${id}`).then((r) => r.data) });
@@ -110,12 +113,13 @@ export default function JobDetail() {
                   Print job card
                 </Button>
                 {editable && (
-                  <Hint text="Closes the job as cancelled, with a reason. Any visit in progress is stopped. This can’t be undone.">
+                  <Hint text="Closes the job as cancelled, with a reason. Any visit in progress is stopped. This can't be undone.">
                     <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<XCircle className="h-4 w-4" />} onClick={() => setDialog('cancel')}>
                       Cancel job
                     </Button>
                   </Hint>
                 )}
+                <HardDeleteButton type="job" id={job.id} onDeleted={() => navigate('/jobs', { replace: true })} />
               </>
             }
           />
@@ -148,14 +152,10 @@ export default function JobDetail() {
 
             <div className="min-w-0 space-y-6">
               <ChargesCard job={job} />
+              {can('estimates.view') && <EstimatesCard job={job} canCreate={can('estimates.manage')} />}
               <JobInfoCard job={job} onEdit={editable ? () => setDialog('edit') : undefined} />
               <CustomerLocationCard job={job} canManage={manage} visitLat={lastVisit?.location_lat} visitLng={lastVisit?.location_lng} />
-              {job.review && (
-                <Card title="Customer feedback">
-                  <Stars rating={job.review.rating} size="md" />
-                  {job.review.comment && <p className="mt-2 text-sm text-slate-700">“{job.review.comment}”</p>}
-                </Card>
-              )}
+              <FeedbackCard job={job} canMark={can('jobs.manage')} />
               <ActivityCard job={job} />
             </div>
           </div>
@@ -231,9 +231,15 @@ function ProductCard({ job, onEdit, onSetModel }: { job: Job; onEdit?: () => voi
             v={
               unit.warranty_type || unit.warranty_expiry ? (
                 <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
-                  {unit.warranty_type && label(unit.warranty_type)}
-                  {unit.warranty_expiry && <span className="text-slate-500">till {date(unit.warranty_expiry)}</span>}
-                  {unit.warranty_expiry && <Badge tone={unit.under_warranty ? 'green' : 'slate'}>{unit.under_warranty ? 'Covered' : 'Expired'}</Badge>}
+                  {unit.under_warranty ? (
+                    <WarrantyBadge unit={unit} />
+                  ) : (
+                    <>
+                      {unit.warranty_type && label(unit.warranty_type)}
+                      {unit.warranty_expiry && <span className="text-slate-500">till {date(unit.warranty_expiry)}</span>}
+                      {unit.warranty_expiry && <Badge tone="slate">Expired</Badge>}
+                    </>
+                  )}
                 </span>
               ) : '—'
             }
@@ -282,7 +288,7 @@ function VisitItem({ job, visit: v, n }: { job: Job; visit: Visit; n: number }) 
         <ul className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600" aria-label="Parts used">
           {v.inventory_usage.map((u) => (
             <li key={u.id} className="flex justify-between gap-3 py-0.5">
-              <span>{u.item?.name} ({u.item?.code}) × {qty(u.quantity)} {u.item?.unit_of_measure}{u.from_technician_stock ? ', from technician’s parts' : ''}</span>
+              <span>{u.item?.name} ({u.item?.code}) × {qty(u.quantity)} {u.item?.unit_of_measure}{u.from_technician_stock ? ", from technician's parts" : ''}</span>
               <span className="tabular-nums">{money(u.total_price)}</span>
             </li>
           ))}
@@ -327,13 +333,99 @@ function VisitItem({ job, visit: v, n }: { job: Job; visit: Visit; n: number }) 
   );
 }
 
+/**
+ * Customer feedback on a completed job. The form is always visible so the office can record or update
+ * feedback at any time — no dialog, no extra click.
+ */
+function FeedbackCard({ job, canMark }: { job: Job; canMark: boolean }) {
+  const [code, setCode] = useState(job.customer_satisfaction_code ?? '');
+  const [note, setNote] = useState(job.feedback_note ?? '');
+  const m = useApiMutation((body: object) => api.post(`/jobs/${job.id}/feedback`, body), { toastValidation: false, invalidate: [['job', String(job.id)], ['jobs'], ['job-quick-counts']] });
+
+  if (job.status !== 'completed' && !job.review && !job.feedback_taken_at) return null;
+
+  const taken = !!job.feedback_taken_at;
+  // Has anything changed from what was saved?
+  const dirty = code.trim() !== (job.customer_satisfaction_code ?? '') || note.trim() !== (job.feedback_note ?? '');
+
+  return (
+    <Card title="Customer feedback">
+      {job.review && (
+        <div className="mb-3">
+          <Stars rating={job.review.rating} size="md" />
+          {job.review.comment && <p className="mt-2 text-sm text-slate-700">&ldquo;{job.review.comment}&rdquo;</p>}
+        </div>
+      )}
+      {canMark ? (
+        <div className="space-y-4">
+          {!taken && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                <MessageSquareWarning className="h-4 w-4 shrink-0" /> Feedback not collected
+              </p>
+            </div>
+          )}
+          <Field label="Customer Satisfaction Code" hint={!taken ? 'The technician may have entered this during the visit.' : undefined} error={fieldError(m.error, 'customer_satisfaction_code')}>
+            <Input maxLength={50} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. SAT12345" />
+          </Field>
+          <Field label="Feedback / remarks" error={fieldError(m.error, 'note')}>
+            <Textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What did the customer say?" />
+          </Field>
+          {taken && job.feedback_taken_at && (
+            <p className="text-xs text-slate-500">
+              Collected {dateTime(job.feedback_taken_at)}{job.feedback_taker ? ` by ${job.feedback_taker.name}` : ''}
+            </p>
+          )}
+          <Button size="sm" loading={m.isPending} disabled={!dirty && taken} onClick={() => m.mutate({ customer_satisfaction_code: code.trim() || null, note: note.trim() || null })}>
+            {taken ? 'Update feedback' : 'Mark feedback collected'}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2 text-sm">
+          {job.feedback_pending ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                <MessageSquareWarning className="h-4 w-4 shrink-0" /> Feedback not collected
+              </p>
+            </div>
+          ) : (
+            <>
+              <Row k="Satisfaction code" v={job.customer_satisfaction_code ?? '—'} />
+              {job.feedback_taken_at && <Row k="Collected" v={`${dateTime(job.feedback_taken_at)}${job.feedback_taker ? ` · ${job.feedback_taker.name}` : ''}`} />}
+              {job.feedback_note && <p className="border-t border-slate-100 pt-2 text-slate-700">{job.feedback_note}</p>}
+            </>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function PhotosCard({ job }: { job: Job }) {
   const { data: lookups } = useLookups();
+  const [zipping, setZipping] = useState(false);
   const photos = job.images?.filter((i) => i.type !== 'signature') ?? [];
   if (!photos.length) return null;
   const photoLabel = (type: string) => lookups?.photo_types?.find((p) => p.key === type)?.label ?? lookups?.photo_labels?.[type] ?? label(type);
+  const downloadAll = async () => {
+    setZipping(true);
+    try {
+      await download(`/jobs/${job.id}/photos.zip`, `Photos-${job.crm_call_id}.zip`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not download the photos.');
+    } finally {
+      setZipping(false);
+    }
+  };
   return (
-    <Card title={`Photos (${photos.length})`}>
+    <Card
+      title={`Photos (${photos.length})`}
+      actions={
+        <Button size="sm" variant="secondary" icon={<Download className="h-4 w-4" />} loading={zipping} onClick={downloadAll}>
+          Download all (ZIP)
+        </Button>
+      }
+    >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {photos.map((img) => (
           <a key={img.id} href={img.url} target="_blank" rel="noopener noreferrer" className="group overflow-hidden rounded-lg border border-slate-200">
@@ -342,6 +434,47 @@ function PhotosCard({ job }: { job: Job }) {
           </a>
         ))}
       </div>
+    </Card>
+  );
+}
+
+/** Estimates made for this job. Shown once there is one, or while the job is still open to start one. */
+function EstimatesCard({ job, canCreate }: { job: Job; canCreate: boolean }) {
+  const q = useQuery({ queryKey: ['estimates', { job_id: job.id }], queryFn: () => api.get<Paginated<Estimate>>('/estimates', { job_id: job.id, per_page: 20 }).then((r) => r.data) });
+  const rows = q.data ?? [];
+  const open = !isClosed(job);
+  if (!rows.length && !(open && canCreate)) return null;
+  return (
+    <Card
+      title="Estimates"
+      actions={
+        canCreate && open && (
+          <Link to={`/estimates/new?job_id=${job.id}`} className="text-sm font-medium text-brand-700 hover:underline">
+            New estimate
+          </Link>
+        )
+      }
+    >
+      {rows.length ? (
+        <ul className="-my-1 divide-y divide-slate-100">
+          {rows.map((e) => (
+            <li key={e.id}>
+              <Link to={`/estimates/${e.id}`} className="flex items-center justify-between gap-3 py-2.5 hover:text-brand-700">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{e.estimate_number}</span>
+                  <span className="block truncate text-xs text-slate-500">{date(e.estimate_date)}{e.subject ? ` · ${e.subject}` : ''}</span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="text-sm font-medium tabular-nums">{money(e.total_amount)}</span>
+                  <EstimateStatusBadge estimate={e} />
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-500">No estimate yet. Make one if the customer wants to know the cost before the work.</p>
+      )}
     </Card>
   );
 }
@@ -396,7 +529,6 @@ function JobInfoCard({ job, onEdit }: { job: Job; onEdit?: () => void }) {
         <Row k="Branch" v={job.branch?.name ?? '—'} />
         <Row k="Service location" v={job.service_location?.name ?? '—'} />
         {job.customer?.crm_id && <Row k="Customer CRM ID" v={job.customer.crm_id} />}
-        <Row k="Customer Satisfaction Code" v={job.customer_satisfaction_code ?? '—'} />
       </div>
       {job.parent && (
         <p className="mt-3 flex items-center gap-1 border-t border-slate-100 pt-3 text-sm">

@@ -23,6 +23,9 @@ const CustomerDetail = lazy(() => import('@/pages/customers/CustomerDetail'));
 const InvoicesPage = lazy(() => import('@/pages/invoices/InvoicesPage'));
 const InvoiceDetail = lazy(() => import('@/pages/invoices/InvoiceDetail'));
 const WalkInBill = lazy(() => import('@/pages/invoices/WalkInBill'));
+const EstimatesPage = lazy(() => import('@/pages/estimates/EstimatesPage'));
+const EstimateForm = lazy(() => import('@/pages/estimates/EstimateForm'));
+const EstimateDetail = lazy(() => import('@/pages/estimates/EstimateDetail'));
 const ExpensesPage = lazy(() => import('@/pages/expenses/ExpensesPage'));
 const IncomePage = lazy(() => import('@/pages/expenses/IncomePage'));
 const RegisterPage = lazy(() => import('@/pages/accounts/RegisterPage'));
@@ -39,6 +42,7 @@ const ReceiptsPage = lazy(() => import('@/pages/accounts/ReceiptsPage'));
 const CashBankPage = lazy(() => import('@/pages/accounts/CashBankPage'));
 const ProfitLossPage = lazy(() => import('@/pages/accounts/ProfitLossPage'));
 const HrToday = lazy(() => import('@/pages/hr/HrToday'));
+const TripsPage = lazy(() => import('@/pages/hr/TripsPage'));
 const AttendanceRegister = lazy(() => import('@/pages/hr/AttendanceRegister'));
 const LeaveRequests = lazy(() => import('@/pages/hr/LeaveRequests'));
 const EmployeesPage = lazy(() => import('@/pages/hr/EmployeesPage'));
@@ -147,6 +151,10 @@ export default function App() {
               <Route path="/invoices" element={<Office ability="invoices.view"><InvoicesPage /></Office>} />
               <Route path="/invoices/walk-in/new" element={<Office ability="billing.walkin"><WalkInBill /></Office>} />
               <Route path="/invoices/:id" element={<RequireAuth ability="invoices.view"><InvoiceDetail /></RequireAuth>} />
+              <Route path="/estimates" element={<Office ability="estimates.view"><EstimatesPage /></Office>} />
+              <Route path="/estimates/new" element={<Office ability="estimates.manage"><EstimateForm /></Office>} />
+              <Route path="/estimates/:id" element={<Office ability="estimates.view"><EstimateDetail /></Office>} />
+              <Route path="/estimates/:id/edit" element={<Office ability="estimates.manage"><EstimateForm /></Office>} />
               {/* Accounts (v2.1) */}
               <Route path="/accounts" element={<Office ability="accounts.view"><AccountsOverview /></Office>} />
               <Route path="/accounts/receivables" element={<Office ability="accounts.view"><ReceivablesPage /></Office>} />
@@ -165,7 +173,8 @@ export default function App() {
               <Route path="/expenses" element={<Navigate to="/accounts/expenses" replace />} />
               <Route path="/books" element={<Navigate to="/accounts/books" replace />} />
 
-              {/* HR (v2.1) */}
+              {/* Workforce (attendance, trips, leave, payroll) */}
+              <Route path="/hr/trips" element={<Office ability="hr.view"><TripsPage /></Office>} />
               <Route path="/hr" element={<Office ability="hr.view"><HrToday /></Office>} />
               <Route path="/hr/attendance" element={<Office ability="hr.view"><AttendanceRegister /></Office>} />
               <Route path="/hr/leave" element={<Office ability="leave.approve"><LeaveRequests /></Office>} />

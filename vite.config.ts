@@ -7,6 +7,8 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 
 // In development the API runs on :8000; proxying keeps the SPA same-origin so
 // Sanctum cookie auth + CSRF work exactly as in production.
+// API_PROXY_TARGET points a second dev server at another API, e.g. one on a throwaway database.
+const api = process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000';
 export default defineConfig({
   plugins: [react()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
@@ -14,8 +16,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false },
-      '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: false },
+      '/api': { target: api, changeOrigin: false },
+      '/sanctum': { target: api, changeOrigin: false },
     },
   },
   build: {

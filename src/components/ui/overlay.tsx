@@ -24,11 +24,15 @@ export function Modal({
 }) {
   const { t } = useTranslation();
   const panel = useRef<HTMLDivElement>(null);
+  // The newest onClose without re-running the effect below: callers pass a new function on every render,
+  // and re-running it moved the focus back to the first field while someone was typing in another.
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     // Focus the first field for keyboard users.
@@ -38,7 +42,7 @@ export function Modal({
       document.body.style.overflow = '';
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   const width = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' }[size];

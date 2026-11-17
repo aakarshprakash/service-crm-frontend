@@ -8,6 +8,7 @@ import { date, money, toMajor, toMinor, today } from '@/lib/format';
 import type { Expense, ExpenseMethod } from '@/lib/types';
 import { Button, Card, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, StatCard, Textarea } from '@/components/ui';
 import { MethodLabel } from '@/components/domain';
+import { HardDeleteButton } from '@/components/HardDelete';
 
 const METHODS: ExpenseMethod[] = ['cash', 'upi', 'cheque', 'bank_transfer'];
 
@@ -132,6 +133,7 @@ export default function ExpensesPage() {
                   <Button size="sm" variant="ghost" aria-label="Delete" className="text-red-600" onClick={() => setDeleting(e)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                  <HardDeleteButton compact type="expense" id={e.id} label="Delete permanently (even on a closed day)" />
                 </div>
               ),
             },

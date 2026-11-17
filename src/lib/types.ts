@@ -242,6 +242,57 @@ export interface GstSummaryRow {
   tax: number;
 }
 
+export interface EstimateItem {
+  id: number;
+  type: 'service' | 'part';
+  item_id: number | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  item?: { id: number; code: string; name: string; unit_of_measure: string } | null;
+}
+
+/** What a job will cost, given to the customer before the work. Never moves stock or money. */
+export interface Estimate {
+  id: number;
+  estimate_number: string;
+  customer_id: number;
+  customer_product_id: number | null;
+  job_id: number | null;
+  branch_id: number | null;
+  status: 'draft' | 'sent' | 'approved' | 'rejected';
+  /** Still open after its last valid day. */
+  is_expired: boolean;
+  estimate_date: string;
+  valid_until: string | null;
+  subject: string | null;
+  notes: string | null;
+  terms: string | null;
+  total_service_charge: number;
+  total_spare_charge: number;
+  discount_amount: number;
+  total_amount: number;
+  is_gst: boolean;
+  taxable_amount: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  igst_amount: number;
+  sent_at: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  /** Opens the PDF without signing in: what is sent to the customer. */
+  share_url?: string;
+  customer?: Pick<Customer, 'id' | 'name' | 'phone'> & Partial<Customer>;
+  customer_product?: CustomerProduct | null;
+  job?: { id: number; crm_call_id: string; status?: JobStatus } | null;
+  branch?: Named | null;
+  creator?: Named | null;
+  decider?: Named | null;
+  items?: EstimateItem[];
+}
+
 export interface Invoice {
   id: number;
   job_id: number | null;
@@ -293,6 +344,12 @@ export interface Job {
   product_category?: string | null;
   /** Collected from the customer, usually by the technician. */
   customer_satisfaction_code?: string | null;
+  /** When the customer's feedback was taken (their code, a portal rating, or the office's tick). */
+  feedback_taken_at?: string | null;
+  feedback_note?: string | null;
+  feedback_taker?: Named | null;
+  /** Completed, with the customer's feedback still to come: the job stays in the technician's app. */
+  feedback_pending?: boolean;
   priority: Priority;
   call_type: string;
   status: JobStatus;
@@ -390,6 +447,9 @@ export interface Lookups {
   job_age: JobAgeSettings;
   /** Whether staff can choose GST / non-GST on a bill, and what a walk-in bill starts as. */
   billing: { gst_registered: boolean; walkin_bills: 'gst' | 'non_gst' };
+  /** Permanent delete of test entries is switched on right now (Settings → Preferences). */
+  hard_delete?: boolean;
+  tech_app?: { show_leave: boolean };
 }
 
 export interface JobAgeSettings {
