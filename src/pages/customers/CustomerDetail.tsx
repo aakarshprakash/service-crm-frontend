@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { unitLabel, type Customer, type CustomerProduct, type Job } from '@/lib/types';
 import { Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, Modal, QueryState } from '@/components/ui';
 import { MapEmbed, StatusBadge } from '@/components/domain';
+import { HardDeleteButton } from '@/components/HardDelete';
 import { Hint } from '@/components/tutorial';
 import { CustomerForm, emptyProduct, ProductFields, productPayload, type CustomerDraft, type ProductDraft } from './CustomerForm';
 
@@ -111,6 +112,7 @@ export default function CustomerDetail() {
                     </Button>
                   </>
                 )}
+                <HardDeleteButton type="customer" id={c.id} onDeleted={() => navigate('/customers', { replace: true })} />
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronLeft, ChevronRight, Lock, Printer } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, HandCoins, HelpCircle, Landmark, Lock, Printer, Users } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { money, today } from '@/lib/format';
@@ -21,6 +21,18 @@ interface Contra { transfer_id: number | null; particulars: string; ref: string 
 interface Totals { cash_in: number; bank_in: number; cash_out: number; bank_out: number }
 /** A short or extra office cash count, posted to the cash book on the day it was counted. */
 interface Adjustment { particulars: string; cash_in: number; cash_out: number }
+/** Cash a technician handed to the office that day. It stays cash, so it changes no total. */
+interface Handover { technician_id: number; technician: string; amount: number }
+/** Where the cash is at this moment: the office drawer and what each technician still holds. */
+interface CashNow {
+  date: string;
+  office: number | null;
+  office_counted: boolean;
+  counted_on: string | null;
+  needs_opening: boolean;
+  technicians: { id: number; name: string; amount: number }[];
+  with_technicians: number;
+}
 interface Day {
   date: string;
   opening: Pair;
@@ -28,6 +40,7 @@ interface Day {
   payments: Group<PaymentLine>[];
   transfers: Contra[];
   adjustments: Adjustment[];
+  handovers?: Handover[];
   totals: Totals;
   closing: Pair;
   empty: boolean;
@@ -36,7 +49,7 @@ interface Day {
   /** On or before the last office close: office entries can't be changed. */
   locked: boolean;
 }
-interface Register { from: string; to: string; opening: Pair; days: Day[]; totals: Totals; closing: Pair; closed_through: string | null }
+interface Register { from: string; to: string; opening: Pair; days: Day[]; totals: Totals; closing: Pair; closed_through: string | null; cash_now?: CashNow }
 
 const IN = 'text-emerald-700';
 const OUT = 'text-red-700';
@@ -118,7 +131,7 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
       </div>
 
       <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
-        {d && <DayPage d={d} />}
+        {d && <DayPage d={d} now={d.date === today() ? q.data?.cash_now : undefined} />}
       </QueryState>
     </>
   );
@@ -127,7 +140,7 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
 /** One line of the book. A line can sit in any of the four columns; a bank move fills one Received and one Paid. */
 interface Row { key: string; dir: 'in' | 'out' | 'move'; main: ReactNode; sub: string; method: string | null; inCash: number; inBank: number; outCash: number; outBank: number }
 /** Everything for one person or source, the way the paper book writes "From Anwar …" then "To Anwar …". */
-interface Block { key: string; name: string; note?: string; rank: number; rows: Row[] }
+interface Block { key: string; name: string; note?: string; rank: number; rows: Row[]; handed?: number }
 
 function toBlocks(d: Day): Block[] {
   const byName = new Map<string, Block>();
@@ -178,6 +191,12 @@ function toBlocks(d: Day): Block[] {
     }
   }
 
+  // Cash handed to the office sits with the person who handed it over, even on a day they collected nothing.
+  for (const h of d.handovers ?? []) {
+    const b = block(h.technician, 0);
+    b.handed = (b.handed ?? 0) + h.amount;
+  }
+
   const people = [...byName.values()].sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
 
   if (d.transfers.length) {
@@ -226,9 +245,14 @@ const COL = 'hidden px-3 md:block';
 const RULE_IN = 'md:border-l md:border-slate-200';
 const RULE_OUT = 'md:border-l-[3px] md:border-double md:border-slate-300';
 
-function DayPage({ d }: { d: Day }) {
+function DayPage({ d, now }: { d: Day; now?: CashNow }) {
   const { can } = useAuth();
   const blocks = useMemo(() => toBlocks(d), [d]);
+  const [help, setHelp] = useState(false);
+  const received = d.totals.cash_in + d.totals.bank_in;
+  const paid = d.totals.cash_out + d.totals.bank_out;
+  // Bank deposits and withdrawals sit in both a Received and a Paid column: say so, or the totals look inflated.
+  const moved = d.transfers.reduce((a, t) => a + t.cash_in + t.bank_in, 0);
   // The forms open over the register, dated the day on screen; saving refreshes this page.
   const [adding, setAdding] = useState<'income' | 'expense' | null>(null);
 
@@ -261,7 +285,21 @@ function DayPage({ d }: { d: Day }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-8 gap-y-1 border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm">
+      {/* The day in three numbers, before any detail. */}
+      {!d.empty && (
+        <div className="grid gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-3">
+          <DayFigure label="Received" amount={received} sign="+" tone={IN} cash={d.totals.cash_in} bank={d.totals.bank_in} />
+          <DayFigure label="Paid" amount={paid} sign="−" tone={OUT} cash={d.totals.cash_out} bank={d.totals.bank_out} />
+          <DayFigure label={received - paid >= 0 ? 'Left over from the day' : 'Paid more than received'} amount={Math.abs(received - paid)} sign={received - paid >= 0 ? '+' : '−'} tone={received - paid >= 0 ? 'text-navy-900' : OUT} cash={d.totals.cash_in - d.totals.cash_out} bank={d.totals.bank_in - d.totals.bank_out} signed />
+        </div>
+      )}
+      {moved > 0 && !d.empty && (
+        <p className="border-b border-slate-200 bg-amber-50/60 px-5 py-2 text-xs text-amber-900">
+          {money(moved)} was moved between cash and the bank today. It shows under both Received and Paid, so it is counted in both totals above.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-1 border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm">
         <span className="text-slate-600">At the start of the day</span>
         <span>
           Cash <strong className="tabular-nums text-slate-900">{money(d.opening.cash)}</strong>
@@ -269,7 +307,18 @@ function DayPage({ d }: { d: Day }) {
         <span>
           Bank / UPI <strong className="tabular-nums text-slate-900">{money(d.opening.bank)}</strong>
         </span>
+        <button type="button" onClick={() => setHelp((v) => !v)} aria-expanded={help} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline print:hidden">
+          <HelpCircle className="h-3.5 w-3.5" /> How to read this <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', help && 'rotate-180')} />
+        </button>
       </div>
+      {help && (
+        <ul className="list-disc space-y-1 border-b border-slate-200 bg-white px-5 py-3 pl-9 text-sm text-slate-600 print:hidden">
+          <li>Each heading is a person. Under a technician are the customers they collected from; under anyone else is what the office received from or paid to them.</li>
+          <li><span className={IN}>Received</span> is money that came in, <span className={OUT}>Paid</span> is money that went out. Each has a Cash column and a Bank / UPI column.</li>
+          <li>A technician’s cash counts as received on the day the customer paid, even if they hand it over later. “Handed to the office” lines show when it reached the office.</li>
+          <li>The total for a person is on the last line of their block. The total for the whole day is at the bottom.</li>
+        </ul>
+      )}
 
       {d.empty ? (
         <div className="px-5 py-14 text-center">
@@ -311,6 +360,13 @@ function DayPage({ d }: { d: Day }) {
                   <BookLine key={r.key} r={r} />
                 ))}
               </ul>
+              {!!b.handed && (
+                <p className="flex items-center gap-2 py-1.5 pl-7 pr-5 text-xs text-slate-600">
+                  <HandCoins className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                  Handed {money(b.handed)} in cash to the office today
+                </p>
+              )}
+              {b.rows.length > 1 && <BlockTotal name={b.name} rows={b.rows} />}
             </section>
           ))}
 
@@ -330,9 +386,10 @@ function DayPage({ d }: { d: Day }) {
 
       {/* The evening check: what's left in cash and in the bank, worked out as a sum. */}
       <div className="grid gap-px border-t-2 border-navy-900 bg-slate-200 sm:grid-cols-2">
-        <Closing label="Cash at the end of the day" hint="Includes cash technicians haven’t handed over yet." opening={d.opening.cash} came={d.totals.cash_in} went={d.totals.cash_out} closing={d.closing.cash} />
-        <Closing label="Bank / UPI at the end of the day" hint="Should match the bank statement." opening={d.opening.bank} came={d.totals.bank_in} went={d.totals.bank_out} closing={d.closing.bank} />
+        <Closing label={now ? 'Cash so far today' : 'Cash at the end of the day'} hint="All the company’s cash: in the office and with technicians." opening={d.opening.cash} came={d.totals.cash_in} went={d.totals.cash_out} closing={d.closing.cash} />
+        <Closing label={now ? 'Bank / UPI so far today' : 'Bank / UPI at the end of the day'} hint="Should match the bank statement." opening={d.opening.bank} came={d.totals.bank_in} went={d.totals.bank_out} closing={d.closing.bank} />
       </div>
+      {now && <WhereTheCashIs now={now} />}
       <OfficeCloseBand date={d.date} close={d.office_close ?? null} locked={!!d.locked} isToday={d.date === today()} />
       {adding === 'income' && <IncomeDialog income={null} defaultDate={d.date} onClose={() => setAdding(null)} />}
       {adding === 'expense' && <ExpenseDialog expense={null} defaultDate={d.date} onClose={() => setAdding(null)} />}
@@ -383,6 +440,97 @@ function BookLine({ r }: { r: Row }) {
         <span className="block text-[11px] text-slate-500">{phone.note}</span>
       </span>
     </li>
+  );
+}
+
+/** One of the three figures at the top of the day, with its cash and bank parts underneath. */
+function DayFigure({ label, amount, sign, tone, cash, bank, signed }: { label: string; amount: number; sign: '+' | '−'; tone: string; cash: number; bank: number; signed?: boolean }) {
+  const part = (v: number) => (signed && v < 0 ? `− ${money(-v)}` : money(v));
+  return (
+    <div className="bg-white px-5 py-4">
+      <p className="text-sm text-slate-600">{label}</p>
+      <p className={cn('mt-0.5 text-2xl font-bold tracking-tight tabular-nums', tone)}>
+        {amount ? `${sign} ` : ''}
+        {money(amount)}
+      </p>
+      <p className="mt-1 text-xs tabular-nums text-slate-500">
+        Cash {part(cash)} · Bank / UPI {part(bank)}
+      </p>
+    </div>
+  );
+}
+
+/** The last line of a person's block: what they brought in and what was paid to them, column by column. */
+function BlockTotal({ name, rows }: { name: string; rows: Row[] }) {
+  const sum = (k: 'inCash' | 'inBank' | 'outCash' | 'outBank') => rows.reduce((a, r) => a + r[k], 0);
+  const [inCash, inBank, outCash, outBank] = [sum('inCash'), sum('inBank'), sum('outCash'), sum('outBank')];
+  return (
+    <div className={cn('flex items-center justify-between gap-3 border-t border-dashed border-slate-200 text-sm', GRID)}>
+      <span className="truncate py-2 pl-7 pr-3 text-slate-600">Total for {name}</span>
+      <Amt v={inCash} tone={IN} strong className={cn(COL, 'py-2', RULE_IN)} />
+      <Amt v={inBank} tone={IN} strong className={cn(COL, 'py-2')} />
+      <Amt v={outCash} tone={OUT} strong className={cn(COL, 'py-2', RULE_OUT)} />
+      <Amt v={outBank} tone={OUT} strong className={cn(COL, 'py-2')} />
+      <span className="shrink-0 py-2 pr-5 text-right text-sm font-semibold tabular-nums md:hidden">
+        {inCash + inBank > 0 && <span className={cn('block', IN)}>+ {money(inCash + inBank)}</span>}
+        {outCash + outBank > 0 && <span className={cn('block', OUT)}>− {money(outCash + outBank)}</span>}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Today only: the cash split by where it physically is. The book's single cash figure mixes the office
+ * drawer with what technicians still carry, which is what makes an evening count hard to match.
+ */
+function WhereTheCashIs({ now }: { now: CashNow }) {
+  const [open, setOpen] = useState(false);
+  const counted = now.counted_on ? new Date(`${now.counted_on}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : null;
+  return (
+    <section aria-label="Where the cash is right now" className="border-t border-slate-200 bg-slate-50 px-5 py-4 print:hidden">
+      <h3 className="text-sm font-semibold text-navy-900">Where the cash is right now</h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="flex items-center gap-2 text-sm text-slate-600"><Building2 className="h-4 w-4 text-slate-400" aria-hidden /> In the office</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-navy-900">{now.office === null ? 'Not counted yet' : money(now.office)}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {now.office === null
+              ? 'Count the office cash once with “Count cash and close” below. From then on this is worked out for you.'
+              : now.office_counted
+                ? 'Counted today.'
+                : `What the drawer should hold, worked forward from the count on ${counted}.`}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="flex items-center gap-2 text-sm text-slate-600"><Users className="h-4 w-4 text-slate-400" aria-hidden /> With technicians</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-navy-900">{money(now.with_technicians)}</p>
+          {now.technicians.length ? (
+            <>
+              <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+                Collected but not handed over, by {now.technicians.length} {now.technicians.length === 1 ? 'person' : 'people'} <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+              </button>
+              {open && (
+                <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-sm">
+                  {now.technicians.map((t) => (
+                    <li key={t.id} className="flex justify-between gap-3">
+                      <span className="truncate text-slate-700">{t.name}</span>
+                      <span className={cn('tabular-nums', t.amount < 0 ? OUT : 'text-slate-900')}>{money(t.amount)}</span>
+                    </li>
+                  ))}
+                  <li className="pt-1">
+                    <Link to="/accounts/cash-close" className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+                      <Landmark className="h-3.5 w-3.5" /> Take cash from technicians
+                    </Link>
+                  </li>
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className="mt-0.5 text-xs text-slate-500">Everything collected has been handed over.</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

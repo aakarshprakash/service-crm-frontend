@@ -84,6 +84,12 @@ export function toQuery(params?: Query): string {
   return s ? `?${s}` : '';
 }
 
+/**
+ * How long a request may take before it is given up on. Without a limit, a connection that stalls
+ * (weak Wi-Fi, a busy server) leaves the page loading for ever, which looks like the app has frozen.
+ */
+const TIMEOUT_MS = { read: 30_000, write: 45_000, upload: 120_000 };
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
 
@@ -91,17 +97,23 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!isForm && body !== undefined) headers['Content-Type'] = 'application/json';
 
   let res: Response;
+  let text: string;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), isForm ? TIMEOUT_MS.upload : method === 'GET' ? TIMEOUT_MS.read : TIMEOUT_MS.write);
   try {
     res = await fetch(BASE + path, {
       method,
       headers,
       body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
+    text = await res.text();
   } catch {
-    throw new ApiError(0, 'Network error. Check your internet connection and try again.');
+    throw new ApiError(0, controller.signal.aborted ? 'This is taking too long. Check your connection and try again.' : 'Network error. Check your internet connection and try again.');
+  } finally {
+    clearTimeout(timer);
   }
 
-  const text = await res.text();
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;

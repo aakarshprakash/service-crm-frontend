@@ -28,8 +28,9 @@ export default {
       },
       keyframes: {
         'fade-in': { from: { opacity: 0, transform: 'translateY(4px)' }, to: { opacity: 1, transform: 'none' } },
+        activity: { from: { transform: 'translateX(-100%)' }, to: { transform: 'translateX(300%)' } },
       },
-      animation: { 'fade-in': 'fade-in .18s ease-out' },
+      animation: { 'fade-in': 'fade-in .18s ease-out', activity: 'activity 1.1s ease-in-out infinite' },
     },
   },
   plugins: [],

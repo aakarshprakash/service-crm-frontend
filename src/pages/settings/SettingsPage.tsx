@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDown, ArrowUp, Building2, Camera, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, SlidersHorizontal, Smartphone, Trash2, Upload, Wallet, Wrench,
+  ArrowDown, ArrowUp, Building2, Camera, Copy, CreditCard, Database, Eye, FileText, GraduationCap, Hash, History, Mail, MapPin, MessageSquareText, Pencil, Plus, ReceiptText, Send, ShieldAlert, SlidersHorizontal, Smartphone, Trash2, Upload, Wallet, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GSTIN_PATTERN, PAN_PATTERN } from '@/lib/india';
@@ -51,7 +51,9 @@ interface SettingsData {
     jobs?: {
       require_signature: boolean; require_punch_in?: boolean; age_warning?: number; age_old?: number; age_critical?: number;
       resume_needs_approval?: boolean; auto_close_visits_at?: string | null; tech_hide_closed_after_days?: number;
+      tech_keep_until_feedback?: boolean;
     };
+    tech_app?: { show_leave?: boolean };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
   features: Record<string, boolean>;
@@ -766,6 +768,18 @@ function Preferences({ data }: { data: SettingsData }) {
             <span className="text-sm text-slate-500">days</span>
           </div>
         </div>
+        <SettingRow
+          title="Keep completed jobs until feedback is taken"
+          desc="A completed job stays in the technician’s list until the Customer Satisfaction Code is entered, the customer rates it on the portal, or the office marks feedback as taken on the job page."
+          checked={s.jobs?.tech_keep_until_feedback ?? true}
+          onChange={(v) => setS({ ...s, jobs: { require_signature: !!s.jobs?.require_signature, ...s.jobs, tech_keep_until_feedback: v } })}
+        />
+        <SettingRow
+          title="Leave in the technician app"
+          desc="Shows leave balances and the Apply button on the app’s Me tab. Off hides them; leave can still be recorded from the web."
+          checked={s.tech_app?.show_leave ?? false}
+          onChange={(v) => setS({ ...s, tech_app: { ...s.tech_app, show_leave: v } })}
+        />
       </SettingGroup>
 
       <SettingGroup icon={<MessageSquareText className="h-4 w-4" />} title="Customers" desc="Messages customers receive and their self-service portal.">
@@ -874,8 +888,72 @@ function Preferences({ data }: { data: SettingsData }) {
         />
       </SettingGroup>
 
+      <HardDeleteSetting />
+
       <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => setS(data.settings)} />
     </div>
+  );
+}
+
+interface HardDeleteStatus { enabled: boolean; expires_at: string | null; enabled_by: string | null; hours: number }
+
+/**
+ * Permanent delete of test entries. Not part of the Save bar: turning it on or off asks for the admin's
+ * password there and then, and it turns itself off after a day.
+ */
+function HardDeleteSetting() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['hard-delete-status'], queryFn: () => api.get<Envelope<HardDeleteStatus>>('/hard-delete').then((r) => r.data) });
+  const [asking, setAsking] = useState(false);
+  const [password, setPassword] = useState('');
+  const on = !!q.data?.enabled;
+  const m = useApiMutation(() => api.put<Envelope<HardDeleteStatus>>('/hard-delete', { enabled: !on, password }), {
+    toastValidation: false,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hard-delete-status'] });
+      qc.invalidateQueries({ queryKey: ['lookups'] });
+      setAsking(false);
+      setPassword('');
+    },
+  });
+  const hours = q.data?.hours ?? 24;
+  return (
+    <SettingGroup icon={<ShieldAlert className="h-4 w-4" />} title="Permanent delete of test entries" desc="For clearing out entries made while testing. It changes your accounts, so it is protected by your password.">
+      <div className="flex items-start justify-between gap-6 py-4 first:pt-0 last:pb-0">
+        <div>
+          <p className="text-sm font-medium text-slate-900">Allow permanent delete {on && <Badge tone="red" className="ml-1">On</Badge>}</p>
+          <p className="mt-0.5 text-sm text-slate-500">
+            While on, an admin sees “Delete permanently” on a job, a customer, a walk-in bill, a receipt, an expense and an income entry. The record and everything under it are removed, used parts go back to stock, and closed days are not protected. Every deletion is kept in the audit log.
+          </p>
+          <p className={cn('mt-1 text-xs font-medium', on ? 'text-red-700' : 'text-slate-500')}>
+            {on
+              ? `On until ${dateTime(q.data?.expires_at)}${q.data?.enabled_by ? `, switched on by ${q.data.enabled_by}` : ''}. It switches itself off then.`
+              : `Off. When switched on it stays on for ${hours} hours, then switches itself off.`}
+          </p>
+        </div>
+        <Button variant={on ? 'secondary' : 'danger'} className="shrink-0" disabled={q.isLoading} onClick={() => setAsking(true)}>
+          {on ? 'Switch off' : 'Switch on'}
+        </Button>
+      </div>
+      <Modal
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={on ? 'Switch off permanent delete?' : 'Switch on permanent delete?'}
+        description={on ? 'Enter your password to switch it off now.' : `Deleted entries can’t be brought back. It stays on for ${hours} hours.`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAsking(false)}>Go back</Button>
+            <Button variant={on ? 'primary' : 'danger'} loading={m.isPending} disabled={!password} onClick={() => m.mutate(undefined)}>
+              {on ? 'Switch off' : 'Switch on'}
+            </Button>
+          </>
+        }
+      >
+        <Field label="Your password" required error={fieldError(m.error, 'password')}>
+          <Input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && password && m.mutate(undefined)} />
+        </Field>
+      </Modal>
+    </SettingGroup>
   );
 }
 
@@ -892,7 +970,7 @@ const MASTER_TYPES = [
   { key: 'expense-categories', label: 'Expense categories', hint: 'Heads for recording expenses, e.g. Fuel, Rent, Salaries.' },
   { key: 'income-categories', label: 'Income categories', hint: 'Kinds of money received without an invoice, e.g. Service charge (no bill), Scrap sale, Commission.' },
   { key: 'upi-accounts', label: 'UPI accounts', hint: 'UPI IDs you collect into. They are printed as a “scan to pay” QR on invoices and shown to technicians when collecting.' },
-  { key: 'shifts', label: 'Shifts', hint: 'Working hours. Set a company default, and give staff their own under HR → Employees. Used to flag late arrival, early leaving and extra time; pay is not affected.' },
+  { key: 'shifts', label: 'Shifts', hint: 'Working hours. Set a company default, and give staff their own under Workforce → Employees. Used to flag late arrival, early leaving and extra time; pay is not affected.' },
   { key: 'leave-types', label: 'Leave types', hint: 'Types of leave staff can apply for, with a yearly quota (0 = not tracked). Unpaid leave is deducted in payroll.' },
   { key: 'holidays', label: 'Holidays', hint: 'Company holidays. They are paid days off and not counted against leave.' },
 ] as const;
@@ -945,9 +1023,9 @@ function PunchRules({ attendance, punchBeforeVisit }: { attendance: SettingsData
   const mode = attendance?.geofence ?? 'off';
   const where = (applies: boolean) =>
     !applies || mode === 'off'
-      ? 'from anywhere. Their location is saved with the punch so you can see it in HR → Today.'
+      ? 'from anywhere. Their location is saved with the punch so you can see it in Workforce → Today.'
       : mode === 'flag'
-        ? 'from anywhere, but punches outside their branch radius are marked with an amber “outside” chip in HR → Today.'
+        ? 'from anywhere, but punches outside their branch radius are marked with an amber “outside” chip in Workforce → Today.'
         : 'only within their branch radius. The app shows how far away they are and refuses the punch outside it.';
   const location = attendance?.require_location || mode === 'enforce' ? ' Location (GPS) must be on.' : '';
   return (

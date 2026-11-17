@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, MapPin, Star } from 'lucide-react';
+import { CheckCircle2, ExternalLink, MapPin, MessageSquareWarning, ShieldCheck, Star } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { date as shortDate } from '@/lib/format';
 import type { JobAgeSettings, JobStatus, Priority } from '@/lib/types';
 
 const statusTone: Record<string, 'slate' | 'blue' | 'amber' | 'green' | 'red' | 'violet' | 'sky'> = {
@@ -51,7 +52,31 @@ export function MethodLabel({ method }: { method: string | null | undefined }) {
   return <>{t(`method.${method}`, { defaultValue: method })}</>;
 }
 
-export const JOB_STATUSES: JobStatus[] = ['open', 'in_progress', 'pending', 'part_pending', 'cancel_requested', 'completed', 'cancelled'];
+/**
+ * Marks a unit that is under warranty, with the date its cover runs to when that is on record.
+ * Shows nothing for a unit that is out of cover or has no warranty details.
+ */
+export function WarrantyBadge({ unit, className }: { unit: { under_warranty?: boolean; warranty_type: string | null; warranty_expiry: string | null } | null | undefined; className?: string }) {
+  if (!unit?.under_warranty) return null;
+  const kind = unit.warranty_type === 'amc' ? 'AMC' : unit.warranty_type === 'extended' ? 'Extended warranty' : 'Under warranty';
+  return (
+    <Badge tone="green" className={className}>
+      <ShieldCheck className="h-3 w-3" />
+      {kind}
+      {unit.warranty_expiry && ` till ${shortDate(unit.warranty_expiry)}`}
+    </Badge>
+  );
+}
+
+export function FeedbackBadge({ job }: { job: { status: string; feedback_pending?: boolean; customer_satisfaction_code?: string | null; feedback_note?: string | null } }) {
+  if (job.status !== 'completed') return null;
+  // Collected only when both the customer's code and the office's remarks are in.
+  if (job.customer_satisfaction_code && job.feedback_note) return <Badge tone="green"><CheckCircle2 className="h-3 w-3" />Feedback collected</Badge>;
+  if (job.feedback_pending) return <Badge tone="amber"><MessageSquareWarning className="h-3 w-3" />Feedback pending</Badge>;
+  return null;
+}
+
+export const JOB_STATUSES: JobStatus[] =['open', 'in_progress', 'pending', 'part_pending', 'cancel_requested', 'completed', 'cancelled'];
 
 /** How old an unfinished job is getting, oldest first, from the days set in Settings. Closed jobs' clocks have stopped, so they're never highlighted. */
 export function ageBands(days: JobAgeSettings = { warning: 3, old: 7, critical: 14 }) {

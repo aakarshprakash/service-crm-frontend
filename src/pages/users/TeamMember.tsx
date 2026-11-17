@@ -418,7 +418,7 @@ function AttendanceTab({ u }: { u: StaffUser }) {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-xs text-slate-500">Hover a day for punch times. An amber ring means a punch outside the branch geofence. Correct days in HR → Attendance register.</p>
+            <p className="mt-3 text-xs text-slate-500">Hover a day for punch times. An amber ring means a punch outside the branch geofence. Correct days in Workforce → Attendance register.</p>
           </>
         )}
       </QueryState>
@@ -461,7 +461,7 @@ function LeaveTab({ u }: { u: StaffUser }) {
             { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
           ]}
         />
-        <p className="px-4 pb-4 text-xs text-slate-500">Approve or reject pending requests in HR → Leave.</p>
+        <p className="px-4 pb-4 text-xs text-slate-500">Approve or reject pending requests in Workforce → Leave.</p>
       </Card>
     </div>
   );
@@ -472,9 +472,9 @@ function PayTab({ u }: { u: StaffUser }) {
   const p = q.data?.profile;
   return (
     <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
-      <Card title="Employment & salary" actions={<Link to="/hr/employees" className="text-sm text-brand-700 hover:underline">Edit in HR → Employees</Link>}>
+      <Card title="Employment & salary" actions={<Link to="/hr/employees" className="text-sm text-brand-700 hover:underline">Edit in Workforce → Employees</Link>}>
         {!p ? (
-          <EmptyState title="No salary set" message="Without a monthly salary they are left out of payroll. Add it in HR → Employees." />
+          <EmptyState title="No salary set" message="Without a monthly salary they are left out of payroll. Add it in Workforce → Employees." />
         ) : (
           <DefinitionList
             items={[
