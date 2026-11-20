@@ -60,19 +60,14 @@ export default function EstimateDetail() {
             actions={
               <>
                 <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => setPreviewing(true)}>
-                  Print / preview
+                  Preview / print
                 </Button>
                 <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => download(`/estimates/${e.id}/pdf`, `${e.estimate_number}.pdf`).catch((err) => toast.error(err.message))}>
-                  Download
+                  Download PDF
                 </Button>
                 {manage && (
                   <Button variant="secondary" icon={<CopyPlus className="h-4 w-4" />} loading={copy.isPending} onClick={() => copy.mutate(undefined)}>
                     Make a copy
-                  </Button>
-                )}
-                {manage && e.status !== 'approved' && (
-                  <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleting(true)}>
-                    Delete
                   </Button>
                 )}
               </>
@@ -95,6 +90,8 @@ export default function EstimateDetail() {
                   </a>
                 )}
                 {(e.customer?.address || e.customer?.city) && <p className="mt-1 text-sm text-slate-600">{[e.customer?.address, e.customer?.city, e.customer?.state].filter(Boolean).join(', ')}</p>}
+                {e.customer_gstin && <p className="mt-2 text-sm text-slate-600">GSTIN <span className="font-medium tabular-nums text-slate-800">{e.customer_gstin}</span></p>}
+                {e.is_gst && e.place_of_supply && <p className="text-xs text-slate-500">Place of supply: {e.place_of_supply}</p>}
                 {e.customer_product && <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-700">{unitLabel(e.customer_product) || 'Product'}{e.customer_product.serial_no ? ` · SN ${e.customer_product.serial_no}` : ''}</p>}
               </Card>
 
@@ -117,6 +114,12 @@ export default function EstimateDetail() {
               </Card>
 
               <History estimate={e} />
+
+              {manage && e.status !== 'approved' && (
+                <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleting(true)}>
+                  Delete this estimate
+                </Button>
+              )}
             </div>
           </div>
 
@@ -304,6 +307,7 @@ function Totals({ estimate: e }: { estimate: Estimate }) {
 }
 
 function History({ estimate: e }: { estimate: Estimate }) {
+  const v = validityText(e);
   const steps = [
     { title: 'Created', when: `${dateTime(e.created_at)}${e.creator ? ` · ${e.creator.name}` : ''}`, tone: 'bg-slate-400' },
     e.sent_at && { title: 'Sent to the customer', when: dateTime(e.sent_at), tone: 'bg-sky-500' },
@@ -313,6 +317,8 @@ function History({ estimate: e }: { estimate: Estimate }) {
       note: e.decision_note,
       tone: e.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500',
     },
+    // Still waiting: when the offer ends, so the follow-up is not left too late.
+    v && e.valid_until && { title: `Valid until ${date(e.valid_until)}`, when: v.text, tone: v.urgent ? 'bg-amber-500' : 'bg-slate-300' },
   ].filter(Boolean) as { title: string; when: string; note?: string | null; tone: string }[];
   return (
     <Card title="History">
@@ -354,11 +360,25 @@ function NextStep({ estimate: e, manage, busy, onShare, onSent, onDecide, onReop
     expired: ['Past its last valid day', `It was valid until ${date(e.valid_until)}. Edit it to give it a new date, or record the customer’s answer.`],
   }[state];
   const open = e.status === 'draft' || e.status === 'sent';
+  const v = validityText(e);
   return (
-    <div className={cn('mb-6 space-y-3 rounded-xl border p-4 shadow-card', tone)}>
-      <div className="min-w-0">
-        <p className="text-base font-semibold text-slate-900">{text[0]}</p>
-        <p className="mt-0.5 text-sm text-slate-600">{text[1]}</p>
+    <div className={cn('mb-6 space-y-4 rounded-xl border p-4 shadow-card', tone)}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-slate-900">{text[0]}</p>
+          <p className="mt-0.5 max-w-xl text-sm text-slate-600">{text[1]}</p>
+        </div>
+        {/* What the customer pays, and until when, without scrolling to the totals. */}
+        <div className="shrink-0 sm:text-right">
+          <p className="text-2xl font-bold tabular-nums text-navy-900 sm:text-3xl">{money(e.total_amount)}</p>
+          <p className="text-xs text-slate-500">{e.is_gst && !e.prices_include_gst ? 'Including GST' : gstLabel(e)}</p>
+          {e.valid_until && (
+            <p className={cn('text-xs', v?.urgent ? 'font-medium text-amber-700' : 'text-slate-500')}>
+              Valid until {date(e.valid_until)}
+              {v && `, ${v.text.toLowerCase()}`}
+            </p>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {open && (

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ChevronRight, Download, Eye, FileClock, FilePen, FilePlus2, Files, MessageCircle, Send, XCircle } from 'lucide-react';
+import { ChevronRight, Download, FilePlus2, MessageCircle } from 'lucide-react';
 import { api, download, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApiMutation, useListQuery } from '@/lib/hooks';
@@ -43,6 +43,8 @@ const toParams = (f: Record<string, string>) => {
   return { ...rest, ...periodRange(period) };
 };
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 /** Estimates given to customers before the work: what is waiting for an answer, and what was approved. */
 export default function EstimatesPage() {
   const navigate = useNavigate();
@@ -75,6 +77,14 @@ export default function EstimatesPage() {
     />
   );
   const total = s ? s.draft + s.sent + s.approved + s.rejected + s.expired : undefined;
+  const tabs: { value: string; label: string; count?: number; warn?: boolean }[] = [
+    { value: '', label: 'All', count: total },
+    { value: 'draft', label: 'Draft', count: s?.draft },
+    { value: 'sent', label: 'Sent', count: s?.sent },
+    { value: 'approved', label: 'Approved', count: s?.approved },
+    { value: 'rejected', label: 'Rejected', count: s?.rejected },
+    { value: 'expired', label: 'Expired', count: s?.expired, warn: true },
+  ];
 
   return (
     <>
@@ -90,31 +100,41 @@ export default function EstimatesPage() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
-        <Tile label="All estimates" value={total} hint={s ? `${money(s.open_total)} open` : undefined} icon={<Files className="h-4 w-4" />} tone="bg-slate-100 text-slate-700" active={status === ''} onClick={() => list.setFilter('status', '')} />
-        <Tile label="Draft" value={s?.draft} hint="Not sent yet" icon={<FilePen className="h-4 w-4" />} tone="bg-amber-50 text-amber-700" active={status === 'draft'} onClick={() => list.setFilter('status', 'draft')} />
-        <Tile label="Sent" value={s?.sent} hint="Waiting for an answer" icon={<Send className="h-4 w-4" />} tone="bg-sky-50 text-sky-700" active={status === 'sent'} onClick={() => list.setFilter('status', 'sent')} />
-        <Tile label="Approved" value={s?.approved} hint={s ? money(s.approved_total) : undefined} icon={<CheckCircle2 className="h-4 w-4" />} tone="bg-emerald-50 text-emerald-700" active={status === 'approved'} onClick={() => list.setFilter('status', 'approved')} />
-        <Tile label="Rejected" value={s?.rejected} hint="Customer said no" icon={<XCircle className="h-4 w-4" />} tone="bg-red-50 text-red-700" active={status === 'rejected'} onClick={() => list.setFilter('status', 'rejected')} />
-        <Tile label="Expired" value={s?.expired} hint="Past the last valid day" icon={<FileClock className="h-4 w-4" />} tone="bg-orange-50 text-orange-700" active={status === 'expired'} onClick={() => list.setFilter('status', 'expired')} />
-      </div>
+      <OpenSummary summary={s} showing={status === 'open'} onShow={() => list.setFilter('status', 'open')} />
 
       <Card padded={false}>
+        <div role="group" aria-label="Show estimates by status" className="scroll-light flex gap-1 overflow-x-auto border-b border-slate-200 px-2 sm:px-3">
+          {tabs.map((t) => {
+            const active = status === t.value;
+            return (
+              <button
+                key={t.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => list.setFilter('status', t.value)}
+                className={cn(
+                  '-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500',
+                  active ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-600 hover:text-slate-900',
+                )}
+              >
+                {t.label}
+                <span
+                  className={cn(
+                    'min-w-[1.5rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums',
+                    active ? 'bg-brand-50 text-brand-700' : t.warn && t.count ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600',
+                  )}
+                >
+                  {t.count ?? '–'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <FilterBar>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Select value={status} onChange={(e) => list.setFilter('status', e.target.value)} aria-label="Status" className="sm:w-44">
-              <option value="">All statuses</option>
-              <option value="open">Waiting (draft or sent)</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="expired">Expired</option>
-            </Select>
-            <Select value={f.period ?? ''} onChange={(e) => list.setFilter('period', e.target.value)} aria-label="Date" className="sm:w-40">
-              {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </Select>
-          </div>
+          <Select value={f.period ?? ''} onChange={(e) => list.setFilter('period', e.target.value)} aria-label="Date" className="sm:w-44">
+            {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </Select>
           <SearchInput value={f.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder="Search estimate no., customer, phone or job" className="sm:ml-auto sm:w-80" />
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={list.clear}>
@@ -123,7 +143,7 @@ export default function EstimatesPage() {
           )}
         </FilterBar>
 
-        {/* Phones: one tappable card per estimate, the amount and the answer first. */}
+        {/* Phones: one card per estimate, the amount and the answer first, the next step underneath. */}
         <div className="md:hidden">
           {list.isFetching && !rows ? (
             <div className="space-y-2 p-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-slate-100" />)}</div>
@@ -131,7 +151,7 @@ export default function EstimatesPage() {
             <ul className={cn('divide-y divide-slate-100', list.isFetching && 'opacity-60')}>
               {rows.map((e) => (
                 <li key={e.id}>
-                  <MobileRow estimate={e} onOpen={() => open(e)} />
+                  <MobileRow estimate={e} onOpen={() => open(e)} onShare={() => share(e)} />
                 </li>
               ))}
             </ul>
@@ -148,36 +168,28 @@ export default function EstimatesPage() {
             empty={empty}
             columns={[
               {
-                key: 'no',
-                header: 'Estimate no.',
-                render: (e) => (
-                  <div>
-                    <p className="whitespace-nowrap font-medium text-brand-700">{e.estimate_number}</p>
-                    {e.creator && <p className="text-xs text-slate-500">by {e.creator.name}</p>}
-                  </div>
-                ),
-              },
-              {
                 key: 'customer',
                 header: 'Customer',
                 render: (e) => (
                   <div className="min-w-0 max-w-[13rem]">
-                    <p className="truncate text-slate-900">{e.customer?.name}</p>
-                    <p className="text-xs text-slate-500">{e.customer?.phone}</p>
+                    <p className="truncate font-medium text-slate-900">{e.customer?.name}</p>
+                    <p className="text-xs tabular-nums text-slate-500">{e.customer?.phone}</p>
                   </div>
                 ),
               },
               {
-                key: 'for',
-                header: 'Job / service',
+                key: 'estimate',
+                header: 'Estimate',
                 render: (e) => (
-                  <div className="max-w-[16rem]">
+                  <div className="max-w-[18rem]">
                     <p className="truncate" title={e.subject ?? undefined}>{e.subject ?? <span className="text-slate-400">No subject</span>}</p>
-                    {e.job && <p className="text-xs text-slate-500">Job {e.job.crm_call_id}</p>}
+                    <p className="truncate text-xs text-slate-500">
+                      <span className="font-medium text-brand-700">{e.estimate_number}</span> on {date(e.estimate_date)}
+                      {e.job && `, job ${e.job.crm_call_id}`}
+                    </p>
                   </div>
                 ),
               },
-              { key: 'date', header: 'Date', render: (e) => <span className="whitespace-nowrap tabular-nums">{date(e.estimate_date)}</span> },
               {
                 key: 'total',
                 header: 'Amount',
@@ -204,16 +216,15 @@ export default function EstimatesPage() {
                 },
               },
               {
-                key: 'actions',
-                header: <span className="sr-only">Actions</span>,
+                key: 'next',
+                header: 'Next step',
                 className: 'w-px',
                 render: (e) => (
-                  <div className="flex items-center justify-end gap-0.5" onClick={(ev) => ev.stopPropagation()}>
-                    <IconAction label={`Open ${e.estimate_number}`} onClick={() => open(e)}><Eye className="h-4 w-4" /></IconAction>
-                    {(e.status === 'draft' || e.status === 'sent') && (
-                      <IconAction label={`Send ${e.estimate_number} on WhatsApp`} onClick={() => share(e)}><MessageCircle className="h-4 w-4" /></IconAction>
-                    )}
-                    <IconAction label={`Download ${e.estimate_number} as PDF`} onClick={() => pdf(e)}><Download className="h-4 w-4" /></IconAction>
+                  <div className="flex items-center justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
+                    <SendButton estimate={e} onShare={() => share(e)} />
+                    <Button variant="ghost" size="sm" icon={<Download className="h-4 w-4" />} onClick={() => pdf(e)} aria-label={`Download ${e.estimate_number} as PDF`}>
+                      PDF
+                    </Button>
                   </div>
                 ),
               },
@@ -226,59 +237,71 @@ export default function EstimatesPage() {
   );
 }
 
-/** A count for one status; selecting it filters the list below to that status. */
-function Tile({ label, value, hint, icon, tone, active, onClick }: { label: string; value?: number; hint?: ReactNode; icon: ReactNode; tone: string; active: boolean; onClick: () => void }) {
+/** The money still open, in one sentence: what to send, and what is waiting for the customer. */
+function OpenSummary({ summary: s, showing, onShow }: { summary?: Summary; showing: boolean; onShow: () => void }) {
+  const waiting = s ? s.draft + s.sent : 0;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'flex min-w-0 flex-col gap-2 rounded-xl border bg-white p-3 text-left shadow-card transition sm:flex-row sm:items-center sm:gap-3',
-        active ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-200/80 hover:border-brand-200',
+    <section aria-label="Open estimates" className="mb-4 flex flex-col gap-3 rounded-xl bg-navy-900 px-5 py-4 text-white shadow-card sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-2xl font-bold tabular-nums sm:text-3xl">
+          {s ? money(s.open_total) : '–'}
+          <span className="ml-2 text-base font-medium text-slate-300">in open estimates</span>
+        </p>
+        <p className="mt-1 text-sm text-slate-300">
+          {!s ? 'Counting…' : waiting === 0 ? 'Nothing is waiting. Every estimate has been answered.' : `${plural(s.draft, 'draft', 'drafts')} not sent yet, ${s.sent} sent and waiting for an answer.`}
+        </p>
+      </div>
+      {waiting > 0 && !showing && (
+        <Button variant="secondary" onClick={onShow} className="shrink-0 border-transparent">
+          Show open estimates
+        </Button>
       )}
-    >
-      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10', tone)}>{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-xl font-bold tabular-nums text-navy-900">{value ?? '–'}</span>
-        <span className="block truncate text-xs font-medium text-slate-600" title={typeof hint === 'string' ? hint : undefined}>{label}</span>
-      </span>
-    </button>
+    </section>
   );
 }
 
-function IconAction({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+/** The one thing worth doing next with an estimate that has not been answered. */
+function SendButton({ estimate: e, onShare, block }: { estimate: Estimate; onShare: () => void; block?: boolean }) {
+  if (e.is_expired || (e.status !== 'draft' && e.status !== 'sent')) return null;
   return (
-    <button type="button" onClick={onClick} title={label} aria-label={label} className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-brand-700">
-      {children}
-    </button>
+    <Button variant={e.status === 'draft' ? 'outline' : 'ghost'} size="sm" icon={<MessageCircle className="h-4 w-4" />} onClick={onShare} className={cn(block && 'flex-1')}>
+      {e.status === 'draft' ? 'Send on WhatsApp' : 'Send again'}
+    </Button>
   );
 }
 
-function MobileRow({ estimate: e, onOpen }: { estimate: Estimate; onOpen: () => void }) {
+function MobileRow({ estimate: e, onOpen, onShare }: { estimate: Estimate; onOpen: () => void; onShare: () => void }) {
   const v = validityText(e);
   const meta: ReactNode[] = [gstLabel(e)];
   if (e.job) meta.push(`Job ${e.job.crm_call_id}`);
+  const canSend = !e.is_expired && (e.status === 'draft' || e.status === 'sent');
   return (
-    <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 px-4 py-3.5 text-left active:bg-slate-50">
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate font-semibold text-slate-900">{e.customer?.name}</p>
-          <p className="shrink-0 font-semibold tabular-nums text-slate-900">{money(e.total_amount)}</p>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <p className="truncate text-xs text-slate-500">
-            {e.estimate_number} · {date(e.estimate_date)}
+    <div>
+      <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 px-4 py-3.5 text-left active:bg-slate-50">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="truncate font-semibold text-slate-900">{e.customer?.name}</p>
+            <p className="shrink-0 font-semibold tabular-nums text-slate-900">{money(e.total_amount)}</p>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="truncate text-xs text-slate-500">
+              {e.estimate_number} on {date(e.estimate_date)}
+            </p>
+            <EstimateStatusBadge estimate={e} />
+          </div>
+          {e.subject && <p className="line-clamp-1 text-sm text-slate-700">{e.subject}</p>}
+          <p className="text-xs text-slate-500">
+            {v && <span className={cn(v.urgent && 'font-medium text-amber-700')}>{v.text}. </span>}
+            {meta.join(', ')}
           </p>
-          <EstimateStatusBadge estimate={e} />
         </div>
-        {e.subject && <p className="line-clamp-1 text-sm text-slate-700">{e.subject}</p>}
-        <p className="text-xs text-slate-500">
-          {v && <span className={cn(v.urgent && 'font-medium text-amber-700')}>{v.text} · </span>}
-          {meta.join(' · ')}
-        </p>
-      </div>
-      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-    </button>
+        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" aria-hidden />
+      </button>
+      {canSend && (
+        <div className="flex px-4 pb-3.5">
+          <SendButton estimate={e} onShare={onShare} block />
+        </div>
+      )}
+    </div>
   );
 }

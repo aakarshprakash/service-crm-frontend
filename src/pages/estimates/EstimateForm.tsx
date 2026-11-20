@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, PencilLine, Plus, Search, X } from 'lucide-react';
 import { api, ApiError, type Envelope, type Paginated } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { useLookups } from '@/lib/hooks';
 import { money, qty, toMajor, toMinor, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -10,6 +11,7 @@ import { unitLabel, type Customer, type CustomerProduct, type Estimate, type Inv
 import { Button, Card, Checkbox, Field, Input, PageHeader, QueryState, SearchInput, Select, Textarea, toast } from '@/components/ui';
 import { estimateTotals, lineTaxes, sharedRate, UNITS, type Totals } from './estimateParts';
 import { blankLine as blank, lineTotal, LineEditor, newKey, noEnterSubmit, type Line } from './LineEditor';
+import { QuickAddCustomer } from './QuickAddCustomer';
 
 interface CustomerView {
   customer: Customer & { products: CustomerProduct[] };
@@ -416,9 +418,12 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
   );
 }
 
-/** Search the customer by name or phone; once chosen, a card with a button to change it. */
+/** Search the customer by name or phone, or add a new one on the spot; once chosen, a card with a button to change it. */
 function CustomerPicker({ customer, customerId, locked, error, onPick, onClear }: { customer?: Customer; customerId: number | null; locked: boolean; error?: string; onPick: (id: number) => void; onClear: () => void }) {
+  const { can } = useAuth();
+  const canAdd = can('customers.manage');
   const [search, setSearch] = useState('');
+  const [adding, setAdding] = useState(false);
   const results = useQuery({ queryKey: ['customer-search', search], queryFn: () => api.get<Paginated<Customer>>('/customers', { search, per_page: 6 }), enabled: search.length >= 2 && !customerId });
   if (customerId) {
     return (
@@ -437,10 +442,20 @@ function CustomerPicker({ customer, customerId, locked, error, onPick, onClear }
       </Field>
     );
   }
+  const label = (
+    <span className="flex items-center justify-between gap-2">
+      Customer
+      {canAdd && (
+        <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+          <Plus className="h-3.5 w-3.5" /> New customer
+        </button>
+      )}
+    </span>
+  );
   return (
-    <Field label="Customer" error={error}>
+    <Field label={label} error={error}>
       <div className="relative">
-        <SearchInput value={search} onChange={setSearch} placeholder="Name or phone" delay={250} />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or phone" delay={250} />
         {search.length >= 2 && (
           <div className="absolute inset-x-0 top-full z-30 mt-1 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lift">
             {results.data?.data.map((c) => (
@@ -449,14 +464,23 @@ function CustomerPicker({ customer, customerId, locked, error, onPick, onClear }
                 <span className="shrink-0 text-xs text-slate-500">{c.phone}</span>
               </button>
             ))}
-            {results.data && !results.data.data.length && (
-              <p className="px-3 py-3 text-sm text-slate-500">
-                No customer matches. <Link to="/customers?new=1" className="font-medium text-brand-700 hover:underline">Add the customer</Link> first.
-              </p>
+            {results.data && !results.data.data.length && <p className="px-3 py-3 text-sm text-slate-500">No customer matches “{search}”.</p>}
+            {canAdd && results.data && (
+              <button type="button" onClick={() => setAdding(true)} className="flex w-full items-center gap-2 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-brand-50">
+                <Plus className="h-4 w-4 shrink-0" /> Add “{search}” as a new customer
+              </button>
             )}
+            {!canAdd && results.data && !results.data.data.length && <p className="px-3 py-3 text-xs text-slate-500">Ask someone who manages customers to add them first.</p>}
           </div>
         )}
       </div>
+      {adding && (
+        <QuickAddCustomer
+          typed={search}
+          onClose={() => setAdding(false)}
+          onCreated={(id) => { setAdding(false); setSearch(''); onPick(id); }}
+        />
+      )}
     </Field>
   );
 }
