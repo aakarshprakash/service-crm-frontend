@@ -31,9 +31,12 @@ interface SettingsData {
   states: string[];
   invoice_templates: string[];
   has_logo: boolean;
+  has_signature: boolean;
+  has_stamp: boolean;
   settings: {
     photo_types?: { key: string; label: string }[];
-    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind };
+    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind; estimates?: BillKind; estimate_prices?: 'before_gst' | 'include_gst' };
+    signature?: { estimates: boolean; invoices: boolean };
     bank?: BankDetails;
     numbering: Record<NumberType, NumberRule>;
     invoice_template: string;
@@ -258,8 +261,8 @@ function Company({ data }: { data: SettingsData }) {
 
           <FormSection title="Tax & registration" hint="With a GSTIN, invoices are issued as GST tax invoices.">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="GSTIN" error={e('gstin')} hint={form.gstin && !GSTIN_PATTERN.test(form.gstin) ? '15 characters, e.g. 32ABCDE1234F1Z5' : undefined}>
-                <Input value={form.gstin} onChange={(ev) => setForm({ ...form, gstin: ev.target.value.toUpperCase().replace(/\s/g, '') })} maxLength={15} placeholder="32ABCDE1234F1Z5" />
+              <Field label="GSTIN" error={e('gstin')} hint={form.gstin && !GSTIN_PATTERN.test(form.gstin) ? '15 characters, e.g. 32ABCDE1234F1Z9' : undefined}>
+                <Input value={form.gstin} onChange={(ev) => setForm({ ...form, gstin: ev.target.value.toUpperCase().replace(/\s/g, '') })} maxLength={15} placeholder="32ABCDE1234F1Z9" />
               </Field>
               <Field
                 label="PAN"
@@ -368,15 +371,17 @@ function Invoicing({ data }: { data: SettingsData }) {
   const emptyBank: BankDetails = { account_name: '', bank_name: '', account_no: '', ifsc: '', branch: '' };
   const savedBank = { ...emptyBank, ...Object.fromEntries(Object.entries(data.settings.bank ?? {}).map(([k, v]) => [k, v ?? ''])) } as BankDetails;
   const [bank, setBank] = useState<BankDetails>(savedBank);
+  const savedSig = data.settings.signature ?? { estimates: true, invoices: false };
+  const [sig, setSig] = useState(savedSig);
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, bank, invoice_template: template }), {
+  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, bank, invoice_template: template, signature: sig }), {
     invalidate: [['settings'], ['lookups']],
     toastValidation: false,
     onSuccess: () => refresh(),
   });
   const e = (n: string) => fieldError(m.error, n);
   const registered = !!data.company.gstin;
-  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template || JSON.stringify(bank) !== JSON.stringify(savedBank);
+  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template || JSON.stringify(bank) !== JSON.stringify(savedBank) || JSON.stringify(sig) !== JSON.stringify(savedSig);
 
   const preview = async (t: string) => {
     setPreviewing(t);
@@ -422,6 +427,27 @@ function Invoicing({ data }: { data: SettingsData }) {
         </div>
       </Card>
 
+      <Card title="Estimates">
+        <p className="mb-4 text-sm text-slate-500">How a new estimate starts. Each estimate can still be made with or without GST, and each line’s GST rate changed, on the estimate itself.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="New estimates start as" hint="The rates on each line come from GST rates below.">
+            <Select value={gst.estimates ?? 'gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, estimates: ev.target.value as BillKind })}>
+              <option value="gst">GST estimate</option>
+              <option value="non_gst">Estimate without GST</option>
+            </Select>
+          </Field>
+          <Field
+            label="Unit prices typed on GST estimates"
+            hint={(gst.estimate_prices ?? 'before_gst') === 'before_gst' ? 'Printed as Total, then GST, then Total including GST.' : 'The total stays as typed; the GST inside it is shown.'}
+          >
+            <Select value={gst.estimate_prices ?? 'before_gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, estimate_prices: ev.target.value as 'before_gst' | 'include_gst' })}>
+              <option value="before_gst">Are before GST: GST is added on top</option>
+              <option value="include_gst">Include GST</option>
+            </Select>
+          </Field>
+        </div>
+      </Card>
+
       <Card title="GST rates">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Service SAC code" error={e('gst.service_sac')} hint="998719 = repair & maintenance of other goods.">
@@ -443,6 +469,18 @@ function Invoicing({ data }: { data: SettingsData }) {
           </Field>
         </div>
         <p className="mt-4 text-xs text-slate-500">Changes apply to new invoices. Invoices already issued keep the tax they were issued with.</p>
+      </Card>
+
+      <Card title="Signature & stamp">
+        <p className="mb-4 text-sm text-slate-500">Your authorised signature and company stamp print above the signatory line. A transparent PNG looks best.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <BrandUpload kind="signature" label="Signature" has={data.has_signature} />
+          <BrandUpload kind="stamp" label="Stamp / seal" has={data.has_stamp} />
+        </div>
+        <div className="mt-5 divide-y divide-slate-100 border-t border-slate-100">
+          <SettingRow title="Show on estimates by default" desc="Each estimate can still turn this off on its own." checked={sig.estimates} onChange={(v) => setSig({ ...sig, estimates: v })} />
+          <SettingRow title="Show on invoices by default" desc="Printed on the invoice above the signatory line." checked={sig.invoices} onChange={(v) => setSig({ ...sig, invoices: v })} />
+        </div>
       </Card>
 
       <Card title="Bank details on invoices">
@@ -507,7 +545,7 @@ function Invoicing({ data }: { data: SettingsData }) {
           })}
         </div>
       </Card>
-      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setBank(savedBank); setGst(data.settings.gst); setTemplate(data.settings.invoice_template); }} />
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setBank(savedBank); setGst(data.settings.gst); setTemplate(data.settings.invoice_template); setSig(savedSig); }} />
     </div>
   );
 }
@@ -536,6 +574,58 @@ function SaveBar({ dirty, saving, onSave, onDiscard }: { dirty: boolean; saving:
 }
 
 /** A switch with a plain-language title and explanation. */
+/** Upload, preview or remove a company brand image (signature or stamp), stored privately like the logo. */
+function BrandUpload({ kind, label, has }: { kind: 'signature' | 'stamp'; label: string; has: boolean }) {
+  const qc = useQueryClient();
+  const { refresh } = useAuth();
+  const [url, setUrl] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!has) { setUrl(null); return; }
+    let made: string | null = null;
+    imageObjectUrl(`/settings/branding/${kind}`).then((u) => setUrl((made = u))).catch(() => setUrl(null));
+    return () => { if (made) URL.revokeObjectURL(made); };
+  }, [has, kind, version]);
+
+  const done = () => { setVersion((v) => v + 1); qc.invalidateQueries({ queryKey: ['settings'] }); qc.invalidateQueries({ queryKey: ['lookups'] }); refresh(); };
+  const upload = async (file: File) => {
+    const fd = new FormData();
+    fd.append(kind, file);
+    setBusy(true);
+    try { await api.post(`/settings/branding/${kind}`, fd); toast.success(`${label} updated.`); done(); }
+    catch (err) { toast.error((err as Error).message); }
+    finally { setBusy(false); }
+  };
+  const remove = async () => {
+    setBusy(true);
+    try { await api.delete(`/settings/branding/${kind}`); toast.success(`${label} removed.`); setUrl(null); done(); }
+    catch (err) { toast.error((err as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <p className="mb-2 text-sm font-medium text-slate-700">{label}</p>
+      <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 p-2">
+        {url ? <img src={url} alt={label} className="max-h-16 max-w-full object-contain" /> : <span className="text-xs text-slate-400">Not uploaded</span>}
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <label className={cn('inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50', busy && 'pointer-events-none opacity-60')}>
+          <Upload className="h-3.5 w-3.5" /> {has ? 'Replace' : 'Upload PNG / JPG'}
+          <input type="file" accept="image/png,image/jpeg" className="hidden" disabled={busy} onChange={(ev) => ev.target.files?.[0] && upload(ev.target.files[0])} />
+        </label>
+        {has && (
+          <button type="button" onClick={remove} disabled={busy} className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-60">
+            <Trash2 className="h-3.5 w-3.5" /> Remove
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SettingRow({ title, desc, checked, onChange, disabled, note }: { title: string; desc: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; note?: string }) {
   return (
     <div className="flex items-start justify-between gap-6 py-4 first:pt-0 last:pb-0">
