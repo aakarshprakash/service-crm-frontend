@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useListQuery, useLookups } from '@/lib/hooks';
 import { date, money, toMajor, toMinor } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { STAFF_ROLES, type EmployeeProfile, type LeaveBalance, type Role } from '@/lib/types';
 import { Badge, Button, Card, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, Spinner, StatCard } from '@/components/ui';
+import { PasswordActions } from '@/pages/users/PasswordActions';
 import { num } from './hrParts';
 
 interface Employee { id: number; name: string; email: string | null; phone: string | null; role: Role; status: string; branch: string | null; profile: EmployeeProfile | null }
@@ -93,6 +96,7 @@ export default function EmployeesPage() {
 function EmployeeDialog({ employee, onClose }: { employee: Employee; onClose: () => void }) {
   const p = employee.profile;
   const { data: lookups } = useLookups();
+  const { can, user: me } = useAuth();
   const [form, setForm] = useState({
     shift_id: String(p?.shift_id ?? ''),
     employee_code: p?.employee_code ?? '',
@@ -253,6 +257,23 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee; onClose: ()
             </div>
           )}
         </section>
+
+        {can('users.manage') && employee.id !== me?.id && (
+          <section className="rounded-xl border border-slate-200 p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Security</p>
+                <p className="text-xs text-slate-500">Forgot or lost their password? These work straight away; you don’t need to press Save.</p>
+              </div>
+              <Link to={`/team/${employee.id}`} className="text-xs text-brand-700 hover:underline">
+                Devices &amp; sessions
+              </Link>
+            </div>
+            <div className="sm:max-w-xs">
+              <PasswordActions user={employee} />
+            </div>
+          </section>
+        )}
       </div>
     </Modal>
   );

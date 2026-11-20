@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Security in Employees & salary:** open an employee and the dialog now ends with a Security section: Set temporary password and Email a reset link, with a link to their devices and sessions. Shown to people who can manage users (never for your own account). It is the same component the Team page's Access & security tab uses.
 - **Estimates** (Finance → Estimates): make an estimate for a customer with service and part lines, discount and GST, optionally linked to a job and product. Download the PDF, share it on WhatsApp or copy a link the customer can open, then mark it approved or rejected. Open estimates past their last valid day show as expired. A job page lists its estimates and can start one.
 - **Warranty on the Jobs list:** a green "Under warranty till …" badge on covered jobs (list and board), and a Warranty filter (under / out of warranty).
 - **Customer feedback on jobs:** a completed job shows "Feedback not taken yet" until the Customer Satisfaction Code is entered, the customer rates it on the portal, or the office marks feedback as taken. New quick filter "Feedback pending" on the Jobs list.

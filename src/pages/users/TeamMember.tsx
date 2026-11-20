@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Building2, Copy, KeyRound, LogOut, Mail, MessageCircle, Monitor, Pencil, Phone, ShieldCheck, Smartphone, Tablet } from 'lucide-react';
+import { ArrowLeft, Building2, LogOut, Mail, MessageCircle, Monitor, Pencil, Phone, Smartphone, Tablet } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApiMutation } from '@/lib/hooks';
 import { date, dateTime, money, relative } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ROLE_SUMMARY, type AttendanceDay, type EmployeeProfile, type LeaveBalance, type LeaveRequest, type StaffUser } from '@/lib/types';
-import { Avatar, Badge, Button, Card, ConfirmDialog, DataTable, DefinitionList, EmptyState, Modal, QueryState, StatCard, Tabs, toast } from '@/components/ui';
+import { Avatar, Badge, Button, Card, ConfirmDialog, DataTable, DefinitionList, EmptyState, QueryState, StatCard, Tabs } from '@/components/ui';
 import { StatusBadge } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
 import { hours, monthName, num, STATUS_STYLE, thisMonth } from '@/pages/hr/hrParts';
 import { UserDialog } from './TeamPage';
+import { PasswordActions } from './PasswordActions';
 
 type Tab = 'overview' | 'access' | 'attendance' | 'leave' | 'pay';
 
@@ -203,20 +204,10 @@ function Overview({ u, stats }: { u: StaffUser; stats: MemberStats | null }) {
 
 function AccessTab({ u, self }: { u: StaffUser; self: boolean }) {
   const q = useQuery({ queryKey: ['user-access', u.id], queryFn: () => api.get<Envelope<Access>>(`/users/${u.id}/sessions`).then((r) => r.data) });
-  const [confirm, setConfirm] = useState<'signout' | 'link' | 'temporary' | null>(null);
+  const [confirm, setConfirm] = useState<'signout' | null>(null);
   const [revoking, setRevoking] = useState<Session | null>(null);
-  const [temporary, setTemporary] = useState<string | null>(null);
   const done = { invalidate: [['user-access', u.id]], onSuccess: () => setConfirm(null) };
   const signOut = useApiMutation(() => api.post(`/users/${u.id}/sign-out`), done);
-  const link = useApiMutation(() => api.post(`/users/${u.id}/password`, { mode: 'link' }), done);
-  const temp = useApiMutation(() => api.post<Envelope<{ temporary_password: string }>>(`/users/${u.id}/password`, { mode: 'temporary' }), {
-    ...done,
-    success: () => 'Temporary password set',
-    onSuccess: (r) => {
-      setConfirm(null);
-      setTemporary(r.data.temporary_password);
-    },
-  });
   const revoke = useApiMutation((s: Session) => api.delete(`/users/${u.id}/sessions/${s.id}`), { invalidate: [['user-access', u.id]], onSuccess: () => setRevoking(null) });
   const a = q.data;
 
@@ -288,17 +279,8 @@ function AccessTab({ u, self }: { u: StaffUser; self: boolean }) {
                 ]}
               />
               {!self ? (
-                <div className="mt-4 flex flex-col gap-2">
-                  <Hint block text="Creates a one-time password you hand over in person or by phone. They are signed out everywhere and must choose their own password when they next sign in, in the app or on the web.">
-                    <Button className="w-full" variant="secondary" icon={<KeyRound className="h-4 w-4" />} onClick={() => setConfirm('temporary')}>
-                      Set temporary password
-                    </Button>
-                  </Hint>
-                  <Hint block text="Emails them a link to choose a new password. They are signed out everywhere straight away.">
-                    <Button className="w-full" variant="secondary" icon={<Mail className="h-4 w-4" />} disabled={!u.email} onClick={() => setConfirm('link')}>
-                      Email a reset link
-                    </Button>
-                  </Hint>
+                <div className="mt-4">
+                  <PasswordActions user={u} />
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-slate-500">
@@ -319,24 +301,6 @@ function AccessTab({ u, self }: { u: StaffUser; self: boolean }) {
             onConfirm={() => signOut.mutate(undefined)}
           />
           <ConfirmDialog
-            open={confirm === 'temporary'}
-            onClose={() => setConfirm(null)}
-            title={`Set a temporary password for ${u.name}?`}
-            message="Their current password stops working and they are signed out everywhere. You’ll see the new password once, to pass on to them."
-            confirmLabel="Set temporary password"
-            loading={temp.isPending}
-            onConfirm={() => temp.mutate(undefined)}
-          />
-          <ConfirmDialog
-            open={confirm === 'link'}
-            onClose={() => setConfirm(null)}
-            title={`Email a reset link to ${u.email}?`}
-            message="They are signed out everywhere now and choose a new password from the link (valid for 60 minutes)."
-            confirmLabel="Send link"
-            loading={link.isPending}
-            onConfirm={() => link.mutate(undefined)}
-          />
-          <ConfirmDialog
             open={!!revoking}
             onClose={() => setRevoking(null)}
             tone="danger"
@@ -346,28 +310,6 @@ function AccessTab({ u, self }: { u: StaffUser; self: boolean }) {
             loading={revoke.isPending}
             onConfirm={() => revoking && revoke.mutate(revoking)}
           />
-          <Modal
-            open={!!temporary}
-            onClose={() => setTemporary(null)}
-            title="Temporary password"
-            description="Shown only now. Give it to them privately; they must change it when they sign in."
-            footer={<Button onClick={() => setTemporary(null)}>Done</Button>}
-          >
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-4 py-3">
-              <code className="text-lg font-semibold tracking-wide text-slate-900">{temporary}</code>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Copy className="h-4 w-4" />}
-                onClick={() => navigator.clipboard?.writeText(temporary ?? '').then(() => toast.success('Copied'), () => toast.error('Copy failed: select and copy it instead'))}
-              >
-                Copy
-              </Button>
-            </div>
-            <p className="mt-3 flex items-start gap-2 text-sm text-slate-600">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> Don’t send it by email or WhatsApp group. Read it out or send it to them directly.
-            </p>
-          </Modal>
         </div>
       )}
     </QueryState>
