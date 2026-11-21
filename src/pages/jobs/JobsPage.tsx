@@ -337,7 +337,7 @@ export default function JobsPage() {
                     <div>
                       <p className="font-medium text-slate-900">{j.crm_call_id}</p>
                       <p className="text-xs text-slate-500">
-                        {date(j.created_at)} ·{' '}
+                        {dateTime(j.created_at)} ·{' '}
                         {ageColours && ageBand(j, bands) ? <span className={cn('rounded px-1.5 py-0.5 font-medium', ageBand(j, bands)!.pill)}>{j.call_age_days}d old</span> : `${j.call_age_days ?? 0}d old`}
                       </p>
                       <WarrantyBadge unit={j.customer_product} className={cn('mt-1', columns.includes('product') && 'md:hidden')} />
