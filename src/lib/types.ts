@@ -246,9 +246,16 @@ export interface EstimateItem {
   id: number;
   type: 'service' | 'part';
   item_id: number | null;
+  /** The item or service name. */
   description: string;
+  /** Longer description printed under the name, e.g. the equipment specification. */
+  details: string | null;
   quantity: number;
+  /** Nos, Mtr, Set… For a part from the price list, its unit unless changed. */
+  unit: string | null;
   unit_price: number;
+  /** The line's GST rate; null takes the rate from Settings → GST (or the part's own rate). */
+  gst_rate: number | null;
   total: number;
   item?: { id: number; code: string; name: string; unit_of_measure: string } | null;
 }
@@ -274,6 +281,14 @@ export interface Estimate {
   discount_amount: number;
   total_amount: number;
   is_gst: boolean;
+  /** True: the rates typed include GST. False: they are before GST and GST is added on top. */
+  prices_include_gst: boolean;
+  /** Whether the company signature and stamp print on this estimate. */
+  show_signature: boolean;
+  customer_gstin: string | null;
+  /** The tax worked out per line when saved; each line's rate is the one actually used. */
+  gst_breakup?: { lines?: { gst_rate: number }[] } | null;
+  place_of_supply: string | null;
   taxable_amount: number;
   cgst_amount: number;
   sgst_amount: number;
@@ -448,7 +463,25 @@ export interface Lookups {
   /** From how many days an unfinished job shows amber, orange ("old") and red. */
   job_age: JobAgeSettings;
   /** Whether staff can choose GST / non-GST on a bill, and what a walk-in bill starts as. */
-  billing: { gst_registered: boolean; walkin_bills: 'gst' | 'non_gst' };
+  billing: {
+    gst_registered: boolean;
+    /** False when the company GSTIN fails its check digit (a placeholder or a typo). */
+    gstin_valid?: boolean;
+    walkin_bills: 'gst' | 'non_gst';
+    job_bills?: 'gst' | 'non_gst' | null;
+    /** Settings → GST rates: on service charges, and on parts without their own rate. */
+    service_rate?: number;
+    part_rate?: number;
+    /** Settings → GST: how a new estimate starts, and whether its rates are typed before or including GST. */
+    estimates?: 'gst' | 'non_gst' | null;
+    estimate_prices?: 'before_gst' | 'include_gst' | null;
+  };
+  /** The company signature and stamp: whether they are uploaded, and whether a new estimate shows them by default. */
+  signature?: {
+    has_signature: boolean;
+    has_stamp: boolean;
+    on_estimates: boolean;
+  };
   /** Permanent delete of test entries is switched on right now (Settings → Preferences). */
   hard_delete?: boolean;
   tech_app?: { show_leave: boolean };
