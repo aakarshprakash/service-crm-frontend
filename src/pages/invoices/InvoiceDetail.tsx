@@ -40,7 +40,7 @@ export default function InvoiceDetail() {
             }
             title={
               <span className="flex flex-wrap items-center gap-3">
-                {inv.invoice_number} <StatusBadge status={inv.payment_status} /> <Badge tone={inv.is_gst ? 'blue' : 'slate'}>{inv.is_gst ? 'GST bill' : 'Non-GST bill'}</Badge> {inv.is_credit && inv.balance_amount > 0 && <Badge tone="violet">Credit</Badge>}
+                {inv.invoice_number} <StatusBadge status={inv.payment_status} /> <Badge tone={inv.is_gst ? 'blue' : 'slate'}>{!inv.is_gst ? 'Non-GST bill' : inv.prices_include_gst === false ? 'GST exclusive' : 'GST inclusive'}</Badge> {inv.is_credit && inv.balance_amount > 0 && <Badge tone="violet">Credit</Badge>}
               </span>
             }
             description={
@@ -52,7 +52,7 @@ export default function InvoiceDetail() {
               <>
                 {inv.source === 'walk_in' && <HardDeleteButton type="invoice" id={inv.id} label="Delete bill" onDeleted={() => navigate('/invoices', { replace: true })} />}
                 {can('invoices.change_bill_type') && (inv.is_gst || lookups?.billing.gst_registered) && (
-                  <Hint text="Switches this bill between GST and non-GST. The total stays the same.">
+                  <Hint text={inv.prices_include_gst === false ? 'Switches this bill between GST and non-GST. GST is added on top of these prices, so the total changes.' : 'Switches this bill between GST and non-GST. The total stays the same.'}>
                     <Button variant="secondary" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setChangingType(true)}>
                       {inv.is_gst ? 'Make non-GST' : 'Make GST bill'}
                     </Button>
@@ -255,9 +255,14 @@ function VisitRows({ v }: { v: NonNullable<NonNullable<Invoice['job']>['visits']
   );
 }
 
-/** Prices include GST, so the customer's total doesn't change: only whether tax is split out on the bill. */
+/**
+ * GST inclusive: the customer's total doesn't change, only whether tax is split out on the bill.
+ * GST exclusive (counter bills): the GST on top comes or goes, so the total and the balance move.
+ */
 function ChangeBillType({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
   const toGst = !invoice.is_gst;
+  const onTop = invoice.prices_include_gst === false;
+  const typed = invoice.total_service_charge + invoice.total_spare_charge - invoice.discount_amount;
   const m = useApiMutation((body: object) => api.post<{ message?: string }>(`/invoices/${invoice.id}/bill-type`, body), {
     invalidate: [['invoice', String(invoice.id)], ['invoices']],
     onSuccess: onClose,
@@ -275,7 +280,13 @@ function ChangeBillType({ invoice, onClose }: { invoice: Invoice; onClose: () =>
       }
     >
       <p className="text-sm text-slate-700">
-        The total stays <strong>{money(invoice.total_amount)}</strong>. {toGst ? 'The bill will show the GST included in that amount.' : 'The bill will no longer show any GST.'}
+        {!onTop ? (
+          <>The total stays <strong>{money(invoice.total_amount)}</strong>. {toGst ? 'The bill will show the GST included in that amount.' : 'The bill will no longer show any GST.'}</>
+        ) : toGst ? (
+          <>GST is added on top of <strong>{money(typed)}</strong>, so the total goes up and the customer owes the GST as well.</>
+        ) : (
+          <>The GST added on top is removed. The total goes down to <strong>{money(typed)}</strong>.</>
+        )}
       </p>
       <p className="mt-2 text-sm text-slate-500">If you already gave the customer a copy, give them the new one.</p>
     </Modal>

@@ -36,8 +36,8 @@ describe('estimateTotals', () => {
 describe('labels', () => {
   it('names how the estimate treats GST', () => {
     expect(gstLabel({ is_gst: false, prices_include_gst: true })).toBe('No GST');
-    expect(gstLabel({ is_gst: true, prices_include_gst: false })).toBe('GST added');
-    expect(gstLabel({ is_gst: true, prices_include_gst: true })).toBe('GST included');
+    expect(gstLabel({ is_gst: true, prices_include_gst: false })).toBe('GST exclusive');
+    expect(gstLabel({ is_gst: true, prices_include_gst: true })).toBe('GST inclusive');
   });
 
   it('finds the rate shared by every line', () => {

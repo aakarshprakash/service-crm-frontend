@@ -211,6 +211,8 @@ export interface InvoiceItem {
   description: string;
   quantity: number;
   unit_price: number;
+  /** The line's own GST rate on a counter bill; null: the part's rate, else Settings → GST. */
+  gst_rate?: number | null;
   total: number;
   item?: { id: number; code: string; name: string; unit_of_measure: string } | null;
 }
@@ -287,7 +289,7 @@ export interface Estimate {
   show_signature: boolean;
   customer_gstin: string | null;
   /** The tax worked out per line when saved; each line's rate is the one actually used. */
-  gst_breakup?: { lines?: { gst_rate: number }[] } | null;
+  gst_breakup?: { lines?: { gst_rate: number; tax?: number; net?: number }[] } | null;
   place_of_supply: string | null;
   taxable_amount: number;
   cgst_amount: number;
@@ -324,8 +326,10 @@ export interface Invoice {
   is_credit: boolean;
   notes: string | null;
   generated_at: string;
-  /** GST tax invoice (prices are GST-inclusive: taxable + taxes = total). */
+  /** GST tax invoice: taxable + taxes = total. */
   is_gst?: boolean;
+  /** True: the prices include GST (every job bill). False: GST exclusive, added on top (counter bills only). */
+  prices_include_gst?: boolean;
   taxable_amount?: number;
   cgst_amount?: number;
   sgst_amount?: number;
@@ -475,6 +479,8 @@ export interface Lookups {
     /** Settings → GST: how a new estimate starts, and whether its rates are typed before or including GST. */
     estimates?: 'gst' | 'non_gst' | null;
     estimate_prices?: 'before_gst' | 'include_gst' | null;
+    /** Settings → GST: whether the prices on a counter bill include GST or have it added on top. */
+    walkin_prices?: 'before_gst' | 'include_gst' | null;
   };
   /** The company signature and stamp: whether they are uploaded, and whether a new estimate shows them by default. */
   signature?: {

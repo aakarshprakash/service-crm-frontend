@@ -43,6 +43,9 @@ export function QuickAddCustomer({ typed, onClose, onCreated }: { typed: string;
   const f = (n: string) => error?.field(n);
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    // This dialog sits inside the estimate form, and React passes a submit up to it even through the portal:
+    // without this, adding the customer also "saves" the estimate and shows "Choose the customer first".
+    e.stopPropagation();
     m.mutate(draft);
   };
 

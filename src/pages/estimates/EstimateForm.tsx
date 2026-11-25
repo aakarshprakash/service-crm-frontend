@@ -73,6 +73,8 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
   const [terms, setTerms] = useState<string | null>(estimate ? estimate.terms ?? '' : null); // null: the company's standard terms
   const [discount, setDiscount] = useState(estimate?.discount_amount ? toMajor(estimate.discount_amount) : '');
   const [gstChoice, setGstChoice] = useState<boolean | null>(estimate ? estimate.is_gst : null); // null: as Settings → GST says
+  // Whether the rates typed already include GST. null: as Settings → GST says (a saved GST estimate keeps its own).
+  const [inclusiveChoice, setInclusiveChoice] = useState<boolean | null>(estimate?.is_gst ? estimate.prices_include_gst : null);
   const [customerGstin, setCustomerGstin] = useState<string | null>(estimate ? estimate.customer_gstin ?? '' : null); // null: not typed yet
   const [lines, setLines] = useState<Line[]>(() =>
     estimate?.items?.length
@@ -111,13 +113,17 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
 
   // Settings → GST decides how a new estimate starts; a saved GST estimate keeps the way it was made.
   const isGst = gstRegistered && (gstChoice ?? billing?.estimates !== 'non_gst');
-  const inclusive = estimate?.is_gst ? estimate.prices_include_gst : billing?.estimate_prices === 'include_gst';
+  const inclusive = inclusiveChoice ?? billing?.estimate_prices === 'include_gst';
   const rateOf = (l: Line) => l.gst_rate ?? (l.type === 'part' ? l.itemRate ?? billing?.part_rate ?? 18 : billing?.service_rate ?? 18);
   const gstin = (customerGstin ?? customer?.gstin ?? '').trim().toUpperCase();
   const discountMinor = toMinor(discount);
-  const totals = estimateTotals(lines.map((l) => ({ gross: lineTotal(l), rate: rateOf(l) })), discountMinor, { on: isGst, inclusive });
+  const subtotal = lines.reduce((sum, l) => sum + lineTotal(l), 0);
+  // Said while typing, not after saving; the totals never go below zero meanwhile.
+  const discountTooBig = discountMinor > subtotal;
+  const appliedDiscount = Math.min(discountMinor, subtotal);
+  const totals = estimateTotals(lines.map((l) => ({ gross: lineTotal(l), rate: rateOf(l) })), appliedDiscount, { on: isGst, inclusive });
   const rate = sharedRate(lines.map(rateOf));
-  const taxes = lineTaxes(lines.map((l) => ({ gross: lineTotal(l), rate: rateOf(l) })), discountMinor, { on: isGst, inclusive });
+  const taxes = lineTaxes(lines.map((l) => ({ gross: lineTotal(l), rate: rateOf(l) })), appliedDiscount, { on: isGst, inclusive });
 
   const update = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const remove = (key: number) => setLines((ls) => ls.filter((l) => l.key !== key));
@@ -189,7 +195,8 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : new ApiError(0, 'Something went wrong.');
       setError(apiErr);
-      const shown = ['estimate_number', 'discount', 'valid_until', 'estimate_date', 'job_id', 'customer_product_id', 'is_gst', 'customer_gstin', 'subject', 'terms', 'items'];
+      // The discount is checked while typing; any other discount message from the server comes up as a toast.
+      const shown = ['estimate_number', 'valid_until', 'estimate_date', 'job_id', 'customer_product_id', 'is_gst', 'customer_gstin', 'subject', 'terms', 'items'];
       if (!Object.keys(apiErr.errors).some((k) => shown.includes(k) || k.startsWith('items.'))) toast.error(apiErr.message);
       else toast.error('Some details need a look. They are marked in red.');
     } finally {
@@ -257,23 +264,21 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
               label="Tax"
               error={f('is_gst')}
               hint={
-                !gstRegistered ? undefined : isGst ? (
-                  <>
-                    {inclusive ? 'Unit prices include GST' : 'GST is added on top of the unit prices'}, as set in{' '}
-                    <Link to="/settings?tab=invoicing" className="font-medium text-brand-700 hover:underline">Settings → GST</Link>.
-                  </>
-                ) : (
+                !gstRegistered ? undefined : !isGst ? (
                   'No GST is shown. The total is what the customer pays.'
+                ) : inclusive ? (
+                  'The unit price already contains GST. Each line shows the tax inside it.'
+                ) : (
+                  'GST is added on top of the unit price and shown under the total.'
                 )
               }
             >
-              <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="radiogroup" aria-label="Tax">
-                {([[true, 'GST'], [false, 'No GST']] as const).map(([value, text]) => (
-                  <button key={text} type="button" role="radio" aria-checked={isGst === value} disabled={value && !gstRegistered} onClick={() => setGstChoice(value)} className={cn('rounded-md py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40', isGst === value ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900')}>
-                    {text}
-                  </button>
-                ))}
-              </div>
+              <Segmented label="Tax" value={isGst} onChange={setGstChoice} options={[{ value: true, text: 'GST', disabled: !gstRegistered }, { value: false, text: 'No GST' }]} />
+              {isGst && (
+                <div className="mt-2">
+                  <Segmented label="How GST is counted" value={inclusive} onChange={setInclusiveChoice} options={[{ value: false, text: 'GST exclusive' }, { value: true, text: 'GST inclusive' }]} />
+                </div>
+              )}
               {!gstRegistered && (
                 <p className="mt-1 text-xs text-slate-500">
                   To give GST estimates, add your GSTIN in <Link to="/settings" className="font-medium text-brand-700 hover:underline">Settings → Company</Link>.
@@ -327,10 +332,10 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
               <LineEditor
                 lines={lines}
                 isGst={isGst}
-                inclusive={inclusive}
                 rateLabel={rateLabel}
                 rateOf={rateOf}
                 taxes={taxes}
+                discounted={appliedDiscount > 0}
                 errorOf={lineError}
                 invalid={(i, k) => !!f(`items.${i}.${k}`)}
                 onChange={update}
@@ -395,7 +400,7 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
               </div>
             </div>
           </Card>
-          <TotalsPanel totals={totals} isGst={isGst} inclusive={inclusive} rate={rate} discount={discount} onDiscount={setDiscount} discountError={f('discount')} />
+          <TotalsPanel totals={totals} isGst={isGst} inclusive={inclusive} rate={rate} discount={discount} onDiscount={setDiscount} discountError={discountTooBig ? `Discount can’t be more than the subtotal (${money(subtotal)}).` : undefined} />
         </div>
       </div>
 
@@ -482,6 +487,19 @@ function CustomerPicker({ customer, customerId, locked, error, onPick, onClear }
         />
       )}
     </Field>
+  );
+}
+
+/** Two choices in one rounded track, one of them selected. */
+function Segmented({ label, value, options, onChange }: { label: string; value: boolean; options: { value: boolean; text: string; disabled?: boolean }[]; onChange: (v: boolean) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.text} type="button" role="radio" aria-checked={value === o.value} disabled={o.disabled} onClick={() => onChange(o.value)} className={cn('rounded-md py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40', value === o.value ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900')}>
+          {o.text}
+        </button>
+      ))}
+    </div>
   );
 }
 

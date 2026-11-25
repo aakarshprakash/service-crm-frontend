@@ -33,7 +33,7 @@ export const UNITS = ['Nos', 'Set', 'Pair', 'Mtr', 'Ft', 'Kg', 'Ltr', 'Job', 'Lo
 /** How the estimate treats GST, in the words used on the screen and the PDF. */
 export function gstLabel(e: Pick<Estimate, 'is_gst' | 'prices_include_gst'>): string {
   if (!e.is_gst) return 'No GST';
-  return e.prices_include_gst ? 'GST included' : 'GST added';
+  return e.prices_include_gst ? 'GST inclusive' : 'GST exclusive';
 }
 
 /** The one rate every line uses, or null when the lines differ. */
