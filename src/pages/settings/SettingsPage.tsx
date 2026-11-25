@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -19,7 +19,7 @@ import { StatusBadge } from '@/components/domain';
 type Tab = 'company' | 'invoicing' | 'preferences' | 'photos' | 'master' | 'templates' | 'payments' | 'email' | 'logs' | 'audit';
 
 type BillKind = 'gst' | 'non_gst';
-type NumberType = 'job' | 'invoice' | 'receipt';
+type NumberType = 'job' | 'invoice' | 'non_gst_invoice' | 'receipt';
 interface NumberRule { date: string; ending: 'counter' | 'random'; digits: number; separator: 'dash' | 'none' }
 interface BankDetails { account_name: string | null; bank_name: string | null; account_no: string | null; ifsc: string | null; branch: string | null }
 
@@ -30,19 +30,24 @@ interface SettingsData {
   };
   states: string[];
   invoice_templates: string[];
+  estimate_templates?: string[];
   has_logo: boolean;
   has_signature: boolean;
   has_stamp: boolean;
   settings: {
     photo_types?: { key: string; label: string }[];
-    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind; estimates?: BillKind; estimate_prices?: 'before_gst' | 'include_gst' };
+    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind; estimates?: BillKind; estimate_prices?: 'before_gst' | 'include_gst'; walkin_prices?: 'before_gst' | 'include_gst' };
     signature?: { estimates: boolean; invoices: boolean };
     bank?: BankDetails;
     numbering: Record<NumberType, NumberRule>;
     invoice_template: string;
+    estimate_template?: string;
     invoice_prefix: string;
     job_prefix: string;
     receipt_prefix: string;
+    /** Non-GST bills in a series of their own, so GST invoice numbers run without gaps. */
+    non_gst_numbering?: boolean;
+    non_gst_invoice_prefix?: string;
     notifications: { sms: boolean; whatsapp: boolean; push: boolean; email?: boolean };
     online_payments: boolean;
     strict_cash_close: boolean;
@@ -59,6 +64,8 @@ interface SettingsData {
     tech_app?: { show_leave?: boolean };
   };
   plan: { name: string; price: number; billing_cycle: string; max_users: number; max_technicians: number } | null;
+  /** What each running counter gives next. */
+  next_numbers?: Partial<Record<NumberType, number>>;
   features: Record<string, boolean>;
   gateway: { driver: string; own_account: boolean; key_hint: string | null; platform_available: boolean; webhook_url: string };
   email: EmailSettingsData;
@@ -363,36 +370,116 @@ const TEMPLATE_INFO: Record<string, { name: string; text: string; swatch: ReactN
   },
 };
 
-/** GST rates and SAC code used on invoices, and the invoice design. */
+const ESTIMATE_TEMPLATE_INFO: Record<string, { name: string; text: string; swatch: ReactNode }> = {
+  modern: {
+    name: 'Modern',
+    text: 'Colour header band, customer and estimate cards, and a clean item table with Total, GST and Total including GST.',
+    swatch: TEMPLATE_INFO.modern!.swatch,
+  },
+  classic: {
+    name: 'Classic GST',
+    text: 'Formal bordered quotation: HSN/SAC, taxable value and GST on every line, GST by HSN, amount in words and the signatory box.',
+    swatch: (
+      <div className="space-y-1 rounded border-2 border-slate-800 bg-white p-1.5">
+        <div className="mx-auto h-1.5 w-2/3 rounded bg-slate-800" />
+        <div className="h-1.5 bg-slate-300" />
+        <div className="grid grid-cols-6 border border-slate-500">
+          {Array.from({ length: 12 }, (_, i) => <div key={i} className={cn('h-1.5 border-slate-400', i % 6 && 'border-l', i >= 6 && 'border-t')} />)}
+        </div>
+        <div className="flex gap-1"><div className="h-3 flex-1 border border-slate-400" /><div className="h-3 w-1/3 border border-slate-400 bg-slate-200" /></div>
+      </div>
+    ),
+  },
+};
+
+/** The designs of one kind of document as cards to choose from, each with a preview. */
+function DesignPicker({ templates, info, value, onChange, previewLabel, previewing, onPreview }: {
+  templates: string[];
+  info: Record<string, { name: string; text: string; swatch: ReactNode }>;
+  value: string;
+  onChange: (t: string) => void;
+  previewLabel: string;
+  previewing: string | null;
+  onPreview: (t: string) => void;
+}) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {templates.map((t) => {
+        const about = info[t] ?? { name: label(t), text: '', swatch: null };
+        const active = value === t;
+        return (
+          <div
+            key={t}
+            role="radio"
+            aria-checked={active}
+            tabIndex={0}
+            onClick={() => onChange(t)}
+            onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && onChange(t)}
+            className={cn('cursor-pointer rounded-xl border-2 p-4 transition', active ? 'border-brand-600 bg-brand-50/40' : 'border-slate-200 hover:border-slate-300')}
+          >
+            <div className="flex gap-4">
+              <div className="w-24 shrink-0">{about.swatch}</div>
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 font-semibold text-slate-900">
+                  {about.name} {active && <Badge tone="blue">Selected</Badge>}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">{about.text}</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="mt-2 -ml-2"
+                  icon={<Eye className="h-3.5 w-3.5" />}
+                  loading={previewing === t}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onPreview(t);
+                  }}
+                >
+                  {previewLabel}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** GST rates and SAC code used on invoices, and the invoice and estimate designs. */
 function Invoicing({ data }: { data: SettingsData }) {
   const { refresh } = useAuth();
   const [gst, setGst] = useState(data.settings.gst);
   const [template, setTemplate] = useState(data.settings.invoice_template);
+  const savedEstimateTemplate = data.settings.estimate_template ?? 'modern';
+  const [estimateTemplate, setEstimateTemplate] = useState(savedEstimateTemplate);
   const emptyBank: BankDetails = { account_name: '', bank_name: '', account_no: '', ifsc: '', branch: '' };
   const savedBank = { ...emptyBank, ...Object.fromEntries(Object.entries(data.settings.bank ?? {}).map(([k, v]) => [k, v ?? ''])) } as BankDetails;
   const [bank, setBank] = useState<BankDetails>(savedBank);
   const savedSig = data.settings.signature ?? { estimates: true, invoices: false };
   const [sig, setSig] = useState(savedSig);
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, bank, invoice_template: template, signature: sig }), {
+  const m = useApiMutation(() => api.put('/settings/preferences', { gst: { ...gst, service_rate: Number(gst.service_rate), part_rate: Number(gst.part_rate) }, bank, invoice_template: template, estimate_template: estimateTemplate, signature: sig }), {
     invalidate: [['settings'], ['lookups']],
     toastValidation: false,
     onSuccess: () => refresh(),
   });
   const e = (n: string) => fieldError(m.error, n);
   const registered = !!data.company.gstin;
-  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template || JSON.stringify(bank) !== JSON.stringify(savedBank) || JSON.stringify(sig) !== JSON.stringify(savedSig);
+  const dirty = JSON.stringify(gst) !== JSON.stringify(data.settings.gst) || template !== data.settings.invoice_template || estimateTemplate !== savedEstimateTemplate || JSON.stringify(bank) !== JSON.stringify(savedBank) || JSON.stringify(sig) !== JSON.stringify(savedSig);
 
-  const preview = async (t: string) => {
-    setPreviewing(t);
+  /** Opens a design filled in with the latest invoice or estimate, in a new tab. */
+  const preview = async (kind: 'invoice' | 'estimate', t: string) => {
+    setPreviewing(`${kind}:${t}`);
     try {
-      window.open(await imageObjectUrl(`/settings/invoice-preview?template=${t}`), '_blank', 'noopener');
+      window.open(await imageObjectUrl(`/settings/${kind}-preview?template=${t}`), '_blank', 'noopener');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Preview not available yet – create an invoice first.');
+      toast.error(err instanceof Error ? err.message : `Preview not available yet – create an ${kind} first.`);
     } finally {
       setPreviewing(null);
     }
   };
+  const previewingOf = (kind: 'invoice' | 'estimate') => (previewing?.startsWith(`${kind}:`) ? previewing.slice(kind.length + 1) : null);
 
   return (
     <div className="space-y-6">
@@ -424,6 +511,15 @@ function Invoicing({ data }: { data: SettingsData }) {
               <option value="non_gst">Non-GST bill</option>
             </Select>
           </Field>
+          <Field
+            label="Prices on walk-in GST bills"
+            hint={(gst.walkin_prices ?? 'include_gst') === 'include_gst' ? 'The customer pays the price typed; the GST inside it is shown. Bills from technician visits always work this way.' : 'GST is added to the prices typed, so the customer pays more. Bills from technician visits still include GST.'}
+          >
+            <Select value={gst.walkin_prices ?? 'include_gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, walkin_prices: ev.target.value as 'before_gst' | 'include_gst' })}>
+              <option value="include_gst">GST inclusive: the price already contains GST</option>
+              <option value="before_gst">GST exclusive: GST is added on top</option>
+            </Select>
+          </Field>
         </div>
       </Card>
 
@@ -441,8 +537,8 @@ function Invoicing({ data }: { data: SettingsData }) {
             hint={(gst.estimate_prices ?? 'before_gst') === 'before_gst' ? 'Printed as Total, then GST, then Total including GST.' : 'The total stays as typed; the GST inside it is shown.'}
           >
             <Select value={gst.estimate_prices ?? 'before_gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, estimate_prices: ev.target.value as 'before_gst' | 'include_gst' })}>
-              <option value="before_gst">Are before GST: GST is added on top</option>
-              <option value="include_gst">Include GST</option>
+              <option value="before_gst">GST exclusive: GST is added on top</option>
+              <option value="include_gst">GST inclusive: the price already contains GST</option>
             </Select>
           </Field>
         </div>
@@ -504,48 +600,14 @@ function Invoicing({ data }: { data: SettingsData }) {
       </Card>
 
       <Card title="Invoice design">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {data.invoice_templates.map((t) => {
-            const info = TEMPLATE_INFO[t] ?? { name: label(t), text: '', swatch: null };
-            const active = template === t;
-            return (
-              <div
-                key={t}
-                role="radio"
-                aria-checked={active}
-                tabIndex={0}
-                onClick={() => setTemplate(t)}
-                onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && setTemplate(t)}
-                className={cn('cursor-pointer rounded-xl border-2 p-4 transition', active ? 'border-brand-600 bg-brand-50/40' : 'border-slate-200 hover:border-slate-300')}
-              >
-                <div className="flex gap-4">
-                  <div className="w-24 shrink-0">{info.swatch}</div>
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 font-semibold text-slate-900">
-                      {info.name} {active && <Badge tone="blue">Selected</Badge>}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">{info.text}</p>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="mt-2 -ml-2"
-                      icon={<Eye className="h-3.5 w-3.5" />}
-                      loading={previewing === t}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        preview(t);
-                      }}
-                    >
-                      Preview with latest invoice
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <DesignPicker templates={data.invoice_templates} info={TEMPLATE_INFO} value={template} onChange={setTemplate} previewLabel="Preview with latest invoice" previewing={previewingOf('invoice')} onPreview={(t) => preview('invoice', t)} />
       </Card>
-      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setBank(savedBank); setGst(data.settings.gst); setTemplate(data.settings.invoice_template); setSig(savedSig); }} />
+
+      <Card title="Estimate design">
+        <p className="mb-4 text-sm text-slate-500">How estimates print and download as PDF, including the link shared with the customer.</p>
+        <DesignPicker templates={data.estimate_templates ?? ['modern']} info={ESTIMATE_TEMPLATE_INFO} value={estimateTemplate} onChange={setEstimateTemplate} previewLabel="Preview with latest estimate" previewing={previewingOf('estimate')} onPreview={(t) => preview('estimate', t)} />
+      </Card>
+      <SaveBar dirty={dirty} saving={m.isPending} onSave={() => m.mutate(undefined)} onDiscard={() => { setBank(savedBank); setGst(data.settings.gst); setTemplate(data.settings.invoice_template); setEstimateTemplate(savedEstimateTemplate); setSig(savedSig); }} />
     </div>
   );
 }
@@ -683,7 +745,7 @@ const NUMBER_DATE_OPTIONS: [string, string][] = [
 ];
 
 /** What the next number will look like. Mirrors DocumentNumber on the server. */
-function numberExample(prefix: string, rule: NumberRule): string {
+function numberExample(prefix: string, rule: NumberRule, next = 42): string {
   const now = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   const yyyy = String(now.getFullYear());
@@ -691,29 +753,33 @@ function numberExample(prefix: string, rule: NumberRule): string {
   const dd = p(now.getDate());
   const dates: Record<string, string> = { none: '', yy: yyyy.slice(2), yyyy, ym: yyyy.slice(2) + mm, yyyymm: yyyy + mm, yymmdd: yyyy.slice(2) + mm + dd, yyyymmdd: yyyy + mm + dd };
   const digits = Number(rule.digits) || 0;
-  const ending = rule.ending === 'random' ? '48213760'.slice(0, digits) : '42'.padStart(digits, '0');
+  const ending = rule.ending === 'random' ? '48213760'.slice(0, digits) : String(next).padStart(digits, '0');
   return [prefix, dates[rule.date], ending].filter(Boolean).join(rule.separator === 'dash' ? '-' : '');
 }
 
-/** One kind of number: its letters, date, ending, and a live example. */
-function NumberingRow({ title, prefix, onPrefix, rule, onRule, allowRandom, errors, note }: {
+/** One kind of number: its letters, date, ending, where the running number goes on from, and a live example. */
+function NumberingRow({ title, prefix, onPrefix, rule, onRule, next, onNext, allowRandom, errors, note }: {
   title: string;
   prefix: string;
   onPrefix: (v: string) => void;
   rule: NumberRule;
   onRule: (r: NumberRule) => void;
+  /** The running number the next one gets; undefined while unknown. */
+  next?: number;
+  onNext: (n: number) => void;
   allowRandom?: boolean;
   errors: (string | undefined)[];
   note?: string;
 }) {
-  const example = numberExample(prefix, rule);
+  const counter = rule.ending !== 'random';
+  const example = numberExample(prefix, rule, next || 1);
   return (
     <div className="py-4 first:pt-0">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-slate-900">{title}</p>
-        <p className="text-sm text-slate-500">Next number looks like <span className="font-mono font-semibold text-slate-900">{example}</span></p>
+        <p className="text-sm text-slate-500">Next number <span className="font-mono font-semibold text-slate-900">{example}</span></p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1.8fr_1.4fr_0.7fr_1.1fr]">
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-[1fr_1.5fr_1.3fr_0.7fr_1fr_0.9fr]">
         <Field label="Letters">
           <Input value={prefix} maxLength={10} onChange={(ev) => onPrefix(ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
         </Field>
@@ -737,13 +803,17 @@ function NumberingRow({ title, prefix, onPrefix, rule, onRule, allowRandom, erro
           )}
         </Field>
         <Field label="Digits">
-          <Input type="number" min={rule.ending === 'random' ? 4 : 3} max={8} value={rule.digits} onChange={(ev) => onRule({ ...rule, digits: Number(ev.target.value) })} />
+          <Input type="number" min={rule.ending === 'random' ? 4 : 1} max={8} value={rule.digits} onChange={(ev) => onRule({ ...rule, digits: Number(ev.target.value) })} />
         </Field>
         <Field label="Parts joined with">
           <Select value={rule.separator} onChange={(ev) => onRule({ ...rule, separator: ev.target.value as NumberRule['separator'] })} aria-label={`${title}: joined with`}>
             <option value="dash">A dash (-)</option>
             <option value="none">Nothing</option>
           </Select>
+        </Field>
+        {/* Where the running number goes on from, e.g. 18 to carry on from another system's bills. */}
+        <Field label="Next number">
+          <Input type="number" min={1} disabled={!counter || next === undefined} value={counter ? next ?? '' : ''} placeholder={counter ? '' : 'Random'} aria-label={`${title}: next number`} onChange={(ev) => onNext(Math.max(0, Math.floor(Number(ev.target.value))))} />
         </Field>
       </div>
       {note && <p className="mt-2 text-xs text-slate-500">{note}</p>}
@@ -756,9 +826,17 @@ function Preferences({ data }: { data: SettingsData }) {
   const { refresh } = useAuth();
   const [s, setS] = useState(data.settings);
   useEffect(() => setS(data.settings), [data.settings]);
-  const m = useApiMutation(() => api.put('/settings/preferences', s), { invalidate: [['settings'], ['lookups'], ['job-quick-counts'], ['location-analysis']], toastValidation: false, onSuccess: () => refresh() });
+  // The next running numbers live apart from the settings: only the ones someone changed are sent.
+  const savedNext = useMemo(() => data.next_numbers ?? {}, [data.next_numbers]);
+  const [next, setNext] = useState(savedNext);
+  useEffect(() => setNext(savedNext), [savedNext]);
+  const changedNext = Object.fromEntries(Object.entries(next).filter(([k, v]) => v !== savedNext[k as NumberType]));
+  const m = useApiMutation(() => api.put('/settings/preferences', { ...s, next_numbers: changedNext }), { invalidate: [['settings'], ['lookups'], ['job-quick-counts'], ['location-analysis']], toastValidation: false, onSuccess: () => refresh() });
   const e = (n: string) => fieldError(m.error, n);
-  const dirty = JSON.stringify(s) !== JSON.stringify(data.settings);
+  const dirty = JSON.stringify(s) !== JSON.stringify(data.settings) || Object.keys(changedNext).length > 0;
+  const numberProps = (type: NumberType) => ({ next: next[type], onNext: (n: number) => setNext({ ...next, [type]: n }) });
+  const registered = !!data.company.gstin;
+  const separate = registered && !!s.non_gst_numbering;
   const notInPlan = 'Not included in your plan.';
 
   return (
@@ -904,25 +982,48 @@ function Preferences({ data }: { data: SettingsData }) {
           onPrefix={(v) => setS({ ...s, job_prefix: v })}
           rule={s.numbering.job}
           onRule={(r) => setS({ ...s, numbering: { ...s.numbering, job: r } })}
+          {...numberProps('job')}
           allowRandom
-          errors={[e('job_prefix'), e('numbering.job.date'), e('numbering.job.ending'), e('numbering.job.digits')]}
+          errors={[e('job_prefix'), e('numbering.job.date'), e('numbering.job.ending'), e('numbering.job.digits'), e('next_numbers.job')]}
         />
         <NumberingRow
-          title="Invoice numbers"
+          title={separate ? 'GST invoice numbers' : 'Invoice numbers'}
           prefix={s.invoice_prefix}
           onPrefix={(v) => setS({ ...s, invoice_prefix: v })}
           rule={s.numbering.invoice}
           onRule={(r) => setS({ ...s, numbering: { ...s.numbering, invoice: r } })}
+          {...numberProps('invoice')}
           note="GST rules require tax invoices to run in order, in at most 16 characters, so these always end with a running number."
-          errors={[e('invoice_prefix'), e('numbering.invoice'), e('numbering.invoice.date'), e('numbering.invoice.digits')]}
+          errors={[e('invoice_prefix'), e('numbering.invoice'), e('numbering.invoice.date'), e('numbering.invoice.digits'), e('next_numbers.invoice')]}
         />
+        {registered && (
+          <SettingRow
+            title="Separate numbers for non-GST bills"
+            desc="Non-GST bills get their own letters and running number, so GST invoice numbers stay in an unbroken order for your accounts."
+            checked={!!s.non_gst_numbering}
+            onChange={(v) => setS({ ...s, non_gst_numbering: v })}
+          />
+        )}
+        {separate && (
+          <NumberingRow
+            title="Non-GST bill numbers"
+            prefix={s.non_gst_invoice_prefix ?? 'BILL'}
+            onPrefix={(v) => setS({ ...s, non_gst_invoice_prefix: v })}
+            rule={s.numbering.non_gst_invoice ?? s.numbering.invoice}
+            onRule={(r) => setS({ ...s, numbering: { ...s.numbering, non_gst_invoice: r } })}
+            {...numberProps('non_gst_invoice')}
+            note="A bill switched between GST and non-GST later takes the next number of its new series."
+            errors={[e('non_gst_invoice_prefix'), e('numbering.non_gst_invoice.date'), e('numbering.non_gst_invoice.digits'), e('next_numbers.non_gst_invoice')]}
+          />
+        )}
         <NumberingRow
           title="Receipt numbers"
           prefix={s.receipt_prefix}
           onPrefix={(v) => setS({ ...s, receipt_prefix: v })}
           rule={s.numbering.receipt}
           onRule={(r) => setS({ ...s, numbering: { ...s.numbering, receipt: r } })}
-          errors={[e('receipt_prefix'), e('numbering.receipt.date'), e('numbering.receipt.digits')]}
+          {...numberProps('receipt')}
+          errors={[e('receipt_prefix'), e('numbering.receipt.date'), e('numbering.receipt.digits'), e('next_numbers.receipt')]}
         />
       </SettingGroup>
 

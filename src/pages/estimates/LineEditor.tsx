@@ -77,11 +77,12 @@ function AutoTextarea({ className, value, ...props }: TextareaHTMLAttributes<HTM
 interface Props {
   lines: Line[];
   isGst: boolean;
-  inclusive: boolean;
   rateLabel: string;
   rateOf: (l: Line) => number;
   /** GST of each line (paise), after its share of the discount. */
   taxes: { taxable: number; tax: number }[];
+  /** A discount is spread over the lines, so each line's tax is worked out after its share. */
+  discounted?: boolean;
   errorOf: (i: number) => string | undefined;
   invalid: (i: number, key: string) => boolean;
   onChange: (key: number, patch: Partial<Line>) => void;
@@ -91,9 +92,19 @@ interface Props {
 }
 
 /** The lines as a table on wide screens and as one card per line on phones. */
-export function LineEditor({ lines, isGst, inclusive, rateLabel, rateOf, taxes, errorOf, invalid, onChange, onRemove, onDuplicate, onMove }: Props) {
+export function LineEditor({ lines, isGst, rateLabel, rateOf, taxes, discounted = false, errorOf, invalid, onChange, onRemove, onDuplicate, onMove }: Props) {
   const num = (v: string) => v.replace(/[^\d.]/g, '');
   const last = lines.length - 1;
+  /** With GST, the wide table lists each line's tax in a column of its own, whether it is added on top or inside the price. */
+  const showTaxAmount = isGst;
+  /**
+   * What the line comes to with its GST: GST added, 1000 at 18% is 1180; GST included, 1000 stays 1000.
+   * After the line's share of any discount, so the lines add up to the total.
+   */
+  const lineAmount = (l: Line, i: number) => {
+    const t = taxes[i];
+    return isGst && t ? t.taxable + t.tax : lineTotal(l);
+  };
 
   const parts = (l: Line, i: number) => ({
     name: <Input data-line-name={l.key} aria-label={`Item ${i + 1} name`} value={l.description} maxLength={2000} invalid={invalid(i, 'description')} placeholder={l.type === 'part' ? 'Item name, e.g. VOLTAS 1.5T split AC' : 'Service, e.g. AC installation'} className="font-medium" onChange={(e) => onChange(l.key, { description: e.target.value.replace(/\n/g, ' ') })} />,
@@ -107,22 +118,27 @@ export function LineEditor({ lines, isGst, inclusive, rateLabel, rateOf, taxes, 
       </Select>
     ),
     type: <TypePicker line={l} onType={(t) => onChange(l.key, typePatch(l, t))} />,
-    amount: <Amount value={lineTotal(l)} tax={isGst ? taxes[i]?.tax ?? 0 : 0} inclusive={inclusive} />,
+    amount: <Amount value={lineAmount(l, i)} tax={isGst ? taxes[i]?.tax ?? 0 : 0} />,
+    // Wide table: the tax has its own column, so the amount stands alone.
+    amountOnly: <Amount value={lineAmount(l, i)} tax={0} />,
+    taxAmount: money(isGst ? taxes[i]?.tax ?? 0 : 0),
     tools: <Tools index={i} last={last} onMove={onMove} onDuplicate={() => onDuplicate(l.key)} onRemove={() => onRemove(l.key)} />,
   });
 
   return (
     <>
-      <table className="hidden w-full text-sm md:table">
+      {/* Fixed layout: the item name and description get whatever the number columns leave, never less. */}
+      <table className="hidden w-full table-fixed text-sm md:table">
         <thead className="border-b border-slate-200 bg-slate-50/70 text-left text-xs font-semibold text-slate-500">
           <tr>
-            <th className="w-12 py-2.5 pl-5 pr-1">#</th>
+            <th className={cn('py-2.5 pl-5 pr-1', showTaxAmount ? 'w-10' : 'w-12')}>#</th>
             <th className="px-2 py-2.5">Item / description</th>
             <th className="w-24 px-2 py-2.5">Unit</th>
-            <th className="w-20 px-2 py-2.5">Qty</th>
-            <th className="w-32 px-2 py-2.5">{rateLabel}</th>
-            {isGst && <th className="w-24 px-2 py-2.5">Tax</th>}
-            <th className="w-36 px-2 py-2.5 text-right">Amount</th>
+            <th className={cn('px-2 py-2.5', showTaxAmount ? 'w-16' : 'w-20')}>Qty</th>
+            <th className={cn('px-2 py-2.5', showTaxAmount ? 'w-28' : 'w-32')}>{rateLabel}</th>
+            {isGst && <th className="w-24 px-2 py-2.5">Tax %</th>}
+            {showTaxAmount && <th className="w-24 px-2 py-2.5 text-right">{discounted ? 'Tax after discount' : 'Tax amount'}</th>}
+            <th className={cn('px-2 py-2.5 text-right', showTaxAmount ? 'w-32' : 'w-36')}>{!showTaxAmount ? 'Amount' : discounted ? 'Amount after discount' : 'Amount incl. GST'}</th>
             <th className="w-20 py-2.5 pr-4"><span className="sr-only">Move, copy or remove</span></th>
           </tr>
         </thead>
@@ -146,7 +162,8 @@ export function LineEditor({ lines, isGst, inclusive, rateLabel, rateOf, taxes, 
                 <td className="px-2 py-3">{c.qty}</td>
                 <td className="px-2 py-3">{c.price}</td>
                 {isGst && <td className="px-2 py-3">{c.tax}</td>}
-                <td className="px-2 py-3 pt-4 text-right">{c.amount}</td>
+                {showTaxAmount && <td className="whitespace-nowrap px-2 py-3 pt-4 text-right tabular-nums text-slate-600">{c.taxAmount}</td>}
+                <td className="px-2 py-3 pt-4 text-right">{showTaxAmount ? c.amountOnly : c.amount}</td>
                 <td className="py-3 pr-4">{c.tools}</td>
               </tr>
             );
@@ -216,16 +233,12 @@ function TypePicker({ line: l, onType }: { line: Line; onType: (t: Line['type'])
   );
 }
 
-/** The line total, with its GST under it: "+ ₹x GST" when GST is added on top, "incl. ₹x GST" when it is inside. */
-function Amount({ value, tax, inclusive }: { value: number; tax: number; inclusive: boolean }) {
+/** The line's amount including GST, with the GST in it said underneath on phones ("incl. ₹180.00 GST"). */
+function Amount({ value, tax }: { value: number; tax: number }) {
   return (
     <>
       <p className="whitespace-nowrap text-base font-semibold tabular-nums text-slate-900">{money(value)}</p>
-      {tax > 0 && (
-        <p className="whitespace-nowrap text-xs tabular-nums text-slate-500">
-          {inclusive ? 'incl.' : '+'} {money(tax)} GST
-        </p>
-      )}
+      {tax > 0 && <p className="whitespace-nowrap text-xs tabular-nums text-slate-500">incl. {money(tax)} GST</p>}
     </>
   );
 }

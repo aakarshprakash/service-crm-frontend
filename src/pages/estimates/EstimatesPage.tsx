@@ -92,15 +92,16 @@ export default function EstimatesPage() {
         title="Estimates"
         description="Quotations for service, installation and maintenance, given before the work."
         actions={
-          manage && (
-            <Button icon={<FilePlus2 className="h-4 w-4" />} onClick={() => navigate('/estimates/new')}>
-              New estimate
-            </Button>
-          )
+          <>
+            <Figures summary={s} />
+            {manage && (
+              <Button icon={<FilePlus2 className="h-4 w-4" />} onClick={() => navigate('/estimates/new')}>
+                New estimate
+              </Button>
+            )}
+          </>
         }
       />
-
-      <OpenSummary summary={s} showing={status === 'open'} onShow={() => list.setFilter('status', 'open')} />
 
       <Card padded={false}>
         <div role="group" aria-label="Show estimates by status" className="scroll-light flex gap-1 overflow-x-auto border-b border-slate-200 px-2 sm:px-3">
@@ -132,12 +133,12 @@ export default function EstimatesPage() {
         </div>
 
         <FilterBar>
+          <SearchInput value={f.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder="Search estimate no., customer, phone or job" className="sm:w-96" />
           <Select value={f.period ?? ''} onChange={(e) => list.setFilter('period', e.target.value)} aria-label="Date" className="sm:w-44">
             {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </Select>
-          <SearchInput value={f.search ?? ''} onChange={(v) => list.setFilter('search', v)} placeholder="Search estimate no., customer, phone or job" className="sm:ml-auto sm:w-80" />
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={list.clear}>
+            <Button variant="ghost" size="sm" onClick={list.clear} className="sm:ml-auto">
               Clear filters
             </Button>
           )}
@@ -217,14 +218,20 @@ export default function EstimatesPage() {
               },
               {
                 key: 'next',
-                header: 'Next step',
+                header: <span className="sr-only">Actions</span>,
                 className: 'w-px',
                 render: (e) => (
                   <div className="flex items-center justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
                     <SendButton estimate={e} onShare={() => share(e)} />
-                    <Button variant="ghost" size="sm" icon={<Download className="h-4 w-4" />} onClick={() => pdf(e)} aria-label={`Download ${e.estimate_number} as PDF`}>
-                      PDF
-                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => pdf(e)}
+                      title="Download PDF"
+                      aria-label={`Download ${e.estimate_number} as PDF`}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
                   </div>
                 ),
               },
@@ -237,26 +244,21 @@ export default function EstimatesPage() {
   );
 }
 
-/** The money still open, in one sentence: what to send, and what is waiting for the customer. */
-function OpenSummary({ summary: s, showing, onShow }: { summary?: Summary; showing: boolean; onShow: () => void }) {
-  const waiting = s ? s.draft + s.sent : 0;
+/** The money in play, quietly beside the title: still open (drafts and sent), and approved. */
+function Figures({ summary: s }: { summary?: Summary }) {
+  const items = [
+    { label: 'Open', value: s?.open_total, hint: s ? `${plural(s.draft + s.sent, 'estimate', 'estimates')} not answered yet` : undefined },
+    { label: 'Approved', value: s?.approved_total, hint: s ? plural(s.approved, 'estimate', 'estimates') : undefined },
+  ];
   return (
-    <section aria-label="Open estimates" className="mb-4 flex flex-col gap-3 rounded-xl bg-navy-900 px-5 py-4 text-white shadow-card sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-2xl font-bold tabular-nums sm:text-3xl">
-          {s ? money(s.open_total) : '–'}
-          <span className="ml-2 text-base font-medium text-slate-300">in open estimates</span>
-        </p>
-        <p className="mt-1 text-sm text-slate-300">
-          {!s ? 'Counting…' : waiting === 0 ? 'Nothing is waiting. Every estimate has been answered.' : `${plural(s.draft, 'draft', 'drafts')} not sent yet, ${s.sent} sent and waiting for an answer.`}
-        </p>
-      </div>
-      {waiting > 0 && !showing && (
-        <Button variant="secondary" onClick={onShow} className="shrink-0 border-transparent">
-          Show open estimates
-        </Button>
-      )}
-    </section>
+    <dl className="mr-2 flex divide-x divide-slate-200">
+      {items.map((it) => (
+        <div key={it.label} className="px-4 first:pl-0 sm:text-right" title={it.hint}>
+          <dt className="text-xs font-medium text-slate-500">{it.label}</dt>
+          <dd className="text-lg font-semibold tabular-nums text-slate-900">{it.value === undefined ? '–' : money(it.value)}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -264,7 +266,7 @@ function OpenSummary({ summary: s, showing, onShow }: { summary?: Summary; showi
 function SendButton({ estimate: e, onShare, block }: { estimate: Estimate; onShare: () => void; block?: boolean }) {
   if (e.is_expired || (e.status !== 'draft' && e.status !== 'sent')) return null;
   return (
-    <Button variant={e.status === 'draft' ? 'outline' : 'ghost'} size="sm" icon={<MessageCircle className="h-4 w-4" />} onClick={onShare} className={cn(block && 'flex-1')}>
+    <Button variant={e.status === 'draft' ? 'secondary' : 'ghost'} size="sm" icon={<MessageCircle className="h-4 w-4" />} onClick={onShare} className={cn(block && 'flex-1')}>
       {e.status === 'draft' ? 'Send on WhatsApp' : 'Send again'}
     </Button>
   );

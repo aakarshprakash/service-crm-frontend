@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, Copy, CopyPlus, Download, MessageCircle, Pencil, Phone, Printer, RotateCcw, Send, Trash2, Wrench, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, Copy, CopyPlus, Download, MessageCircle, Pencil, Phone, Printer, RotateCcw, Send, Trash2, Wrench, XCircle } from 'lucide-react';
 import { api, download, imageObjectUrl, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation } from '@/lib/hooks';
@@ -9,7 +9,7 @@ import { date, dateTime, money, qty } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { unitLabel, type Estimate, type EstimateItem } from '@/lib/types';
 import { Button, Card, ConfirmDialog, Field, Modal, PageHeader, QueryState, Spinner, Textarea, toast } from '@/components/ui';
-import { EstimateStatusBadge, estimateState, gstLabel, sharedRate, validityText, whatsAppLink } from './estimateParts';
+import { EstimateStatusBadge, gstLabel, sharedRate, validityText, whatsAppLink } from './estimateParts';
 
 /** One estimate: where it stands and the next step, then the estimate as the customer reads it. */
 export default function EstimateDetail() {
@@ -22,6 +22,7 @@ export default function EstimateDetail() {
   const [previewing, setPreviewing] = useState(false);
   const e = q.data;
   const manage = can('estimates.manage');
+  const open = e?.status === 'draft' || e?.status === 'sent';
   const invalidate = [['estimate', String(id)], ['estimates']];
 
   const status = useApiMutation((s: Estimate['status']) => api.post(`/estimates/${id}/status`, { status: s }), { invalidate });
@@ -57,24 +58,43 @@ export default function EstimateDetail() {
                 {e.creator ? ` · made by ${e.creator.name}` : ''}
               </>
             }
-            actions={
-              <>
-                <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => setPreviewing(true)}>
-                  Preview / print
-                </Button>
-                <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => download(`/estimates/${e.id}/pdf`, `${e.estimate_number}.pdf`).catch((err) => toast.error(err.message))}>
-                  Download PDF
-                </Button>
-                {manage && (
-                  <Button variant="secondary" icon={<CopyPlus className="h-4 w-4" />} loading={copy.isPending} onClick={() => copy.mutate(undefined)}>
-                    Make a copy
-                  </Button>
-                )}
-              </>
-            }
           />
 
-          <NextStep estimate={e} manage={manage} busy={status.isPending} onShare={share} onSent={() => status.mutate('sent')} onDecide={setDeciding} onReopen={() => status.mutate('draft')} onEdit={() => navigate(`/estimates/${e.id}/edit`)} />
+          {/*
+            One toolbar under the title, so the buttons never squeeze it. Left: the steps with the customer
+            (Send while it is a draft, their answer once it is out). Right: working on the estimate itself.
+          */}
+          <div className="-mt-2 mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {open && <SendMenu primary={e.status === 'draft'} canMarkSent={manage && e.status === 'draft'} busy={status.isPending} onShare={share} onSent={() => status.mutate('sent')} />}
+              {manage && open && (
+                <>
+                  <Button variant={e.status === 'sent' ? 'primary' : 'secondary'} icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => setDeciding('approved')}>
+                    Approve
+                  </Button>
+                  <Button variant="secondary" icon={<XCircle className="h-4 w-4" />} onClick={() => setDeciding('rejected')}>
+                    Reject
+                  </Button>
+                </>
+              )}
+              {manage && !open && (
+                <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />} loading={status.isPending} onClick={() => status.mutate('draft')}>
+                  Reopen to change
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {manage && open && (
+                <Button variant="secondary" icon={<Pencil className="h-4 w-4" />} onClick={() => navigate(`/estimates/${e.id}/edit`)}>
+                  Edit
+                </Button>
+              )}
+              {/* Opens the PDF in the page; its window has the Print and Download buttons. */}
+              <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => setPreviewing(true)}>
+                Print / download
+              </Button>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
@@ -115,10 +135,17 @@ export default function EstimateDetail() {
 
               <History estimate={e} />
 
-              {manage && e.status !== 'approved' && (
-                <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleting(true)}>
-                  Delete this estimate
-                </Button>
+              {manage && (
+                <div className="flex flex-wrap gap-1">
+                  <Button variant="ghost" size="sm" icon={<CopyPlus className="h-4 w-4" />} loading={copy.isPending} onClick={() => copy.mutate(undefined)}>
+                    Make a copy
+                  </Button>
+                  {e.status !== 'approved' && (
+                    <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleting(true)}>
+                      Delete this estimate
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -136,6 +163,11 @@ export default function EstimateDetail() {
 function EstimateSheet({ estimate: e }: { estimate: Estimate }) {
   const items = e.items ?? [];
   const rates = lineRates(e);
+  const gstLines = lineGst(e);
+  const inclusive = e.is_gst && e.prices_include_gst;
+  const discounted = e.discount_amount > 0;
+  // With GST each line lists its tax and what it comes to with GST: added, 1000 at 18% is 1180; included, 1000 stays 1000.
+  const amountOf = (l: EstimateItem, i: number) => (e.is_gst ? gstLines[i]?.net ?? l.total : l.total);
   const v = validityText(e);
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
@@ -148,31 +180,36 @@ function EstimateSheet({ estimate: e }: { estimate: Estimate }) {
         </p>
       </header>
 
-      {/* Wide screens: the PDF's columns. */}
-      <table className="hidden min-w-full text-sm sm:table">
+      {/*
+        Wide screens: the PDF's columns. The card sits beside the side panels, so the table stays compact:
+        the unit goes with the quantity ("60 Nos"), amounts never break, and the description takes what is left.
+      */}
+      <table className="hidden w-full text-sm sm:table">
         <thead className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
           <tr>
-            <th className="w-10 py-2.5 pl-6 pr-2 font-semibold">#</th>
-            <th className="px-3 py-2.5 font-semibold">Item description</th>
-            <th className="px-3 py-2.5 text-center font-semibold">Unit</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Qty</th>
-            <th className="px-3 py-2.5 text-right font-semibold">{e.is_gst && e.prices_include_gst ? 'Rate incl. GST' : 'Rate'}</th>
-            {e.is_gst && <th className="px-3 py-2.5 text-right font-semibold">Tax</th>}
-            <th className="py-2.5 pl-3 pr-6 text-right font-semibold">Amount</th>
+            <th className="w-8 py-2.5 pl-5 pr-1 font-semibold">#</th>
+            <th className="px-2 py-2.5 font-semibold">Item description</th>
+            <th className="px-2 py-2.5 text-right font-semibold">Qty</th>
+            <th className="px-2 py-2.5 text-right font-semibold">{inclusive ? 'Rate incl. GST' : 'Rate'}</th>
+            {e.is_gst && <th className="px-2 py-2.5 text-right font-semibold">Tax %</th>}
+            {e.is_gst && <th className="px-2 py-2.5 text-right font-semibold">{discounted ? 'Tax after discount' : 'Tax amount'}</th>}
+            <th className="py-2.5 pl-2 pr-5 text-right font-semibold">{!e.is_gst ? 'Amount' : discounted ? 'Amount after discount' : 'Amount incl. GST'}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.map((l, i) => (
             <tr key={l.id} className="align-top">
-              <td className="py-3 pl-6 pr-2 tabular-nums text-slate-400">{i + 1}</td>
-              <td className="px-3 py-3">
+              <td className="py-3 pl-5 pr-1 tabular-nums text-slate-400">{i + 1}</td>
+              <td className="px-2 py-3">
                 <LineText line={l} />
               </td>
-              <td className="px-3 py-3 text-center text-slate-600">{l.unit ?? '—'}</td>
-              <td className="px-3 py-3 text-right tabular-nums">{qty(l.quantity)}</td>
-              <td className="px-3 py-3 text-right tabular-nums">{money(l.unit_price)}</td>
-              {e.is_gst && <td className="px-3 py-3 text-right tabular-nums text-slate-600">{rates[i]}%</td>}
-              <td className="py-3 pl-3 pr-6 text-right font-medium tabular-nums text-slate-900">{money(l.total)}</td>
+              <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">
+                {qty(l.quantity)} {l.unit && <span className="text-slate-500">{l.unit}</span>}
+              </td>
+              <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{money(l.unit_price)}</td>
+              {e.is_gst && <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums text-slate-600">{rates[i]}%</td>}
+              {e.is_gst && <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums text-slate-600">{money(gstLines[i]?.tax ?? 0)}</td>}
+              <td className="whitespace-nowrap py-3 pl-2 pr-5 text-right font-medium tabular-nums text-slate-900">{money(amountOf(l, i))}</td>
             </tr>
           ))}
         </tbody>
@@ -188,9 +225,9 @@ function EstimateSheet({ estimate: e }: { estimate: Estimate }) {
               <div className="mt-2 flex items-baseline justify-between gap-3 text-sm">
                 <span className="tabular-nums text-slate-500">
                   {qty(l.quantity)} {l.unit ?? ''} × {money(l.unit_price)}
-                  {e.is_gst && ` · GST ${rates[i]}%`}
+                  {e.is_gst && ` · GST ${rates[i]}% (${money(gstLines[i]?.tax ?? 0)})`}
                 </span>
-                <span className="font-semibold tabular-nums text-slate-900">{money(l.total)}</span>
+                <span className="font-semibold tabular-nums text-slate-900">{money(amountOf(l, i))}</span>
               </div>
             </div>
           </li>
@@ -255,6 +292,12 @@ function LineText({ line: l }: { line: EstimateItem }) {
 function lineRates(e: Estimate): number[] {
   const breakup = e.gst_breakup?.lines ?? [];
   return (e.items ?? []).map((l, i) => Number(l.gst_rate ?? breakup[i]?.gst_rate ?? 0));
+}
+
+/** Each line's GST and its amount with GST (after its share of any discount), in paise, from the saved breakup. */
+function lineGst(e: Estimate): { tax: number; net: number | undefined }[] {
+  const breakup = e.gst_breakup?.lines ?? [];
+  return (e.items ?? []).map((_, i) => ({ tax: breakup[i]?.tax ?? 0, net: breakup[i]?.net }));
 }
 
 function TotalRow({ k, v, sub, strong, muted }: { k: ReactNode; v: ReactNode; sub?: ReactNode; strong?: boolean; muted?: boolean }) {
@@ -339,84 +382,59 @@ function History({ estimate: e }: { estimate: Estimate }) {
   );
 }
 
-/** The one thing to do next, said plainly, with its buttons. */
-function NextStep({ estimate: e, manage, busy, onShare, onSent, onDecide, onReopen, onEdit }: {
-  estimate: Estimate;
-  manage: boolean;
+/** Send: WhatsApp, the link, or just record that it went out some other way. Sharing a draft marks it sent. */
+function SendMenu({ primary, canMarkSent, busy, onShare, onSent }: {
+  primary: boolean;
+  canMarkSent: boolean;
   busy: boolean;
   onShare: (how: 'whatsapp' | 'link') => void;
   onSent: () => void;
-  onDecide: (d: 'approved' | 'rejected') => void;
-  onReopen: () => void;
-  onEdit: () => void;
 }) {
-  const state = estimateState(e);
-  const tone = { draft: 'border-slate-200 bg-white', sent: 'border-sky-200 bg-sky-50/60', approved: 'border-emerald-200 bg-emerald-50/60', rejected: 'border-red-200 bg-red-50/50', expired: 'border-amber-200 bg-amber-50/60' }[state];
-  const text = {
-    draft: ['Send it to the customer', 'Share it on WhatsApp or copy its link. It is marked as sent when you do.'],
-    sent: ['Waiting for the customer’s answer', `Sent on ${dateTime(e.sent_at)}. Record their answer here once you have it.`],
-    approved: ['Approved by the customer', 'The work can go ahead. The invoice is made from the job’s visits as usual.'],
-    rejected: ['Rejected by the customer', 'Reopen it to change the prices, or make a copy as a new estimate.'],
-    expired: ['Past its last valid day', `It was valid until ${date(e.valid_until)}. Edit it to give it a new date, or record the customer’s answer.`],
-  }[state];
-  const open = e.status === 'draft' || e.status === 'sent';
-  const v = validityText(e);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (ev: MouseEvent) => ref.current && !ref.current.contains(ev.target as Node) && setOpen(false);
+    const escape = (ev: KeyboardEvent) => ev.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+  const pick = (act: () => void) => () => {
+    setOpen(false);
+    act();
+  };
+  const item = 'flex w-full items-start gap-2.5 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none';
   return (
-    <div className={cn('mb-6 space-y-4 rounded-xl border p-4 shadow-card', tone)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-slate-900">{text[0]}</p>
-          <p className="mt-0.5 max-w-xl text-sm text-slate-600">{text[1]}</p>
-        </div>
-        {/* What the customer pays, and until when, without scrolling to the totals. */}
-        <div className="shrink-0 sm:text-right">
-          <p className="text-2xl font-bold tabular-nums text-navy-900 sm:text-3xl">{money(e.total_amount)}</p>
-          <p className="text-xs text-slate-500">{e.is_gst && !e.prices_include_gst ? 'Including GST' : gstLabel(e)}</p>
-          {e.valid_until && (
-            <p className={cn('text-xs', v?.urgent ? 'font-medium text-amber-700' : 'text-slate-500')}>
-              Valid until {date(e.valid_until)}
-              {v && `, ${v.text.toLowerCase()}`}
-            </p>
+    <div className="relative" ref={ref}>
+      <Button variant={primary ? 'primary' : 'secondary'} icon={<Send className="h-4 w-4" />} loading={busy} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        Send
+        <ChevronDown className="-mr-1 h-4 w-4 opacity-70" aria-hidden />
+      </Button>
+      {open && (
+        <div role="menu" className="absolute left-0 top-12 z-40 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lift animate-fade-in">
+          <button type="button" role="menuitem" autoFocus className={item} onClick={pick(() => onShare('whatsapp'))}>
+            <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /> Send on WhatsApp
+          </button>
+          <button type="button" role="menuitem" className={item} onClick={pick(() => onShare('link'))}>
+            <Copy className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /> Copy link
+          </button>
+          {canMarkSent && (
+            <div className="mt-1 border-t border-slate-100 pt-1">
+              <button type="button" role="menuitem" className={item} onClick={pick(onSent)}>
+                <Send className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span>
+                  Mark as sent
+                  <span className="block text-xs text-slate-500">Sent it some other way</span>
+                </span>
+              </button>
+            </div>
           )}
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        {open && (
-          <>
-            <Button icon={<MessageCircle className="h-4 w-4" />} variant={e.status === 'draft' ? 'primary' : 'secondary'} onClick={() => onShare('whatsapp')}>
-              WhatsApp
-            </Button>
-            <Button variant="secondary" icon={<Copy className="h-4 w-4" />} onClick={() => onShare('link')}>
-              Copy link
-            </Button>
-          </>
-        )}
-        {manage && e.status === 'draft' && (
-          <Button variant="secondary" icon={<Send className="h-4 w-4" />} loading={busy} onClick={onSent}>
-            Mark as sent
-          </Button>
-        )}
-        {manage && open && (
-          <>
-            {/* The customer's answer, set apart from sending. */}
-            <span className="col-span-2 mt-1 text-xs font-medium text-slate-500 sm:ml-3 sm:mt-0 sm:border-l sm:border-slate-200 sm:pl-4">Customer answered:</span>
-            <Button variant={e.status === 'sent' ? 'primary' : 'secondary'} icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => onDecide('approved')}>
-              Approved
-            </Button>
-            <Button variant="secondary" icon={<XCircle className="h-4 w-4" />} onClick={() => onDecide('rejected')}>
-              Rejected
-            </Button>
-            <Button variant="ghost" className="col-span-2 sm:ml-auto" icon={<Pencil className="h-4 w-4" />} onClick={onEdit}>
-              Edit estimate
-            </Button>
-          </>
-        )}
-        {manage && !open && (
-          <Button variant="secondary" className="col-span-2" icon={<RotateCcw className="h-4 w-4" />} loading={busy} onClick={onReopen}>
-            Reopen to change
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 }
