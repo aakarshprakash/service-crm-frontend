@@ -9,6 +9,7 @@ import { date, money, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Estimate } from '@/lib/types';
 import { Button, Card, DataTable, EmptyState, FilterBar, PageHeader, Pagination, SearchInput, Select, toast } from '@/components/ui';
+import { GstFilter } from '@/components/domain';
 import { EstimateStatusBadge, gstLabel, validityText, whatsAppLink } from './estimateParts';
 
 interface Summary { draft: number; sent: number; approved: number; rejected: number; expired: number; open_total: number; approved_total: number }
@@ -52,8 +53,8 @@ export default function EstimatesPage() {
   const manage = can('estimates.manage');
   const list = useListQuery<Estimate>('estimates', '/estimates', {}, toParams);
   const f = list.filters;
-  // The numbers follow the search and dates, but not the status they are shown on.
-  const scope = { search: f.search, ...periodRange(f.period) };
+  // The numbers follow the search, GST and dates, but not the status they are shown on.
+  const scope = { search: f.search, gst: f.gst, ...periodRange(f.period) };
   const summary = useQuery({ queryKey: ['estimates', 'summary', scope], queryFn: () => api.get<Envelope<Summary>>('/estimates/summary', scope).then((r) => r.data) });
   const s = summary.data;
   const status = f.status ?? '';
@@ -72,7 +73,7 @@ export default function EstimatesPage() {
   const empty = (
     <EmptyState
       title={hasFilters ? 'No estimate matches' : 'No estimates yet'}
-      message={hasFilters ? 'Try another status, date or search.' : 'Make one for a customer who wants to know the cost before the work starts.'}
+      message={hasFilters ? 'Try another status, GST type, date or search.' : 'Make one for a customer who wants to know the cost before the work starts.'}
       action={manage && !hasFilters ? <Button size="sm" onClick={() => navigate('/estimates/new')}>New estimate</Button> : undefined}
     />
   );
@@ -137,6 +138,7 @@ export default function EstimatesPage() {
           <Select value={f.period ?? ''} onChange={(e) => list.setFilter('period', e.target.value)} aria-label="Date" className="sm:w-44">
             {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </Select>
+          <GstFilter value={f.gst ?? ''} onChange={(v) => list.setFilter('gst', v)} />
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={list.clear} className="sm:ml-auto">
               Clear filters

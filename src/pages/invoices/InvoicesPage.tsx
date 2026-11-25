@@ -5,7 +5,7 @@ import { useListQuery, useStaffOptions } from '@/lib/hooks';
 import { date, money } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 import { Badge, Button, Card, DataTable, EmptyState, FilterBar, Input, PageHeader, Pagination, SearchInput, Select, StatCard } from '@/components/ui';
-import { StatusBadge } from '@/components/domain';
+import { GstFilter, StatusBadge } from '@/components/domain';
 import { Hint } from '@/components/tutorial';
 
 export default function InvoicesPage() {
@@ -51,6 +51,7 @@ export default function InvoicesPage() {
             <option value="job">Job invoices</option>
             <option value="walk_in">Walk-in bills</option>
           </Select>
+          <GstFilter value={f.gst ?? ''} onChange={(v) => list.setFilter('gst', v)} />
           <Select value={f.technician_id ?? ''} onChange={(e) => list.setFilter('technician_id', e.target.value)} className="sm:w-44" aria-label="Technician">
             <option value="">All technicians</option>
             {techs?.map((t) => (
@@ -83,7 +84,7 @@ export default function InvoicesPage() {
               render: (i) => (
                 <div>
                   <p className="font-medium text-slate-900">{i.invoice_number}</p>
-                  <p className="text-xs text-slate-500">{date(i.generated_at)} · {i.is_gst ? 'GST' : 'Non-GST'}</p>
+                  <p className="text-xs text-slate-500">{date(i.generated_at)} · {!i.is_gst ? 'Non-GST' : i.prices_include_gst === false ? 'GST exclusive' : 'GST inclusive'}</p>
                 </div>
               ),
             },
