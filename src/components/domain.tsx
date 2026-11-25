@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, ExternalLink, MapPin, MessageSquareWarning, ShieldCheck, Star } from 'lucide-react';
-import { Badge } from '@/components/ui';
+import { Badge, Select } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { date as shortDate } from '@/lib/format';
 import type { JobAgeSettings, JobStatus, Priority } from '@/lib/types';
@@ -155,5 +155,18 @@ export function Section({ title, children, actions }: { title: string; children:
       </div>
       {children}
     </div>
+  );
+}
+
+/** The GST filter on the invoice and estimate lists. The value is sent to the server as `gst`. */
+export function GstFilter({ value, onChange, className = 'sm:w-44' }: { value: string; onChange: (value: string) => void; className?: string }) {
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value)} className={className} aria-label="GST">
+      <option value="">GST + non-GST</option>
+      <option value="gst">GST (all)</option>
+      <option value="exclusive">GST exclusive</option>
+      <option value="inclusive">GST inclusive</option>
+      <option value="non_gst">Non-GST</option>
+    </Select>
   );
 }
