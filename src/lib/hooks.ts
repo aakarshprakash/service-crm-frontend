@@ -36,17 +36,22 @@ export function useListQuery<T>(key: string, path: string, defaults: Record<stri
     placeholderData: keepPreviousData,
   });
 
-  const setFilter = (name: string, value: string | null | undefined) => {
+  /** Several filters in one step; calling setFilter twice in a row would lose the first change. */
+  const setFilters = (changes: Record<string, string | null | undefined>) => {
     const next = new URLSearchParams(params);
-    if (value === null || value === undefined || value === '') next.delete(name);
-    else next.set(name, value);
-    if (name !== 'page') next.delete('page');
+    for (const [name, value] of Object.entries(changes)) {
+      if (value === null || value === undefined || value === '') next.delete(name);
+      else next.set(name, value);
+    }
+    if (!('page' in changes)) next.delete('page');
     setParams(next, { replace: true });
   };
 
+  const setFilter = (name: string, value: string | null | undefined) => setFilters({ [name]: value });
+
   const clear = () => setParams(new URLSearchParams(), { replace: true });
 
-  return { ...query, filters, setFilter, clear };
+  return { ...query, filters, setFilter, setFilters, clear };
 }
 
 /** Mutation with success toast + error toast (except field-level validation errors). */

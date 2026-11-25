@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsFetching, useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, Boxes, Building2, CalendarCheck, ChevronDown, ChevronsLeft, ChevronsRight, ClipboardList, CreditCard, FileBarChart, FileSignature, Gauge, Hammer, Home, Landmark,
-  LayoutDashboard, LogIn, LogOut, MapPin, Menu, Package, Receipt, Settings, ShieldCheck, Sparkles, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
+  LayoutDashboard, LogIn, LogOut, MapPin, Menu, Package, PackageCheck, Receipt, Settings, ShieldCheck, Sparkles, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { api, setToken, type Paginated } from '@/lib/api';
@@ -118,6 +118,7 @@ function useNav(): NavSection[] {
       label: t('section.stock'),
       items: [
         { to: '/inventory', label: t('nav.inventory'), icon: icon(Boxes), show: can('inventory.view') },
+        { to: '/spares', label: t('nav.spares'), icon: icon(PackageCheck), show: can('spares.view') },
         { to: '/assets', label: t('nav.assets'), icon: icon(Hammer), show: can('assets.view') },
       ],
     },

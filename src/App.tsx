@@ -50,6 +50,7 @@ const PayrollPage = lazy(() => import('@/pages/hr/PayrollPage'));
 const PayrollRunDetail = lazy(() => import('@/pages/hr/PayrollRunDetail'));
 const MyHr = lazy(() => import('@/pages/hr/MyHr'));
 const InventoryPage = lazy(() => import('@/pages/inventory/InventoryPage'));
+const SparesPage = lazy(() => import('@/pages/spares/SparesPage'));
 const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const TeamPage = lazy(() => import('@/pages/users/TeamPage'));
 const TeamMember = lazy(() => import('@/pages/users/TeamMember'));
@@ -183,6 +184,7 @@ export default function App() {
               <Route path="/hr/payroll/:id" element={<Office ability="payroll.manage"><PayrollRunDetail /></Office>} />
               <Route path="/me" element={<Office ability="self.service"><MyHr /></Office>} />
               <Route path="/inventory" element={<Office ability="inventory.view"><InventoryPage /></Office>} />
+              <Route path="/spares" element={<Office ability="spares.view"><SparesPage /></Office>} />
               <Route path="/assets" element={<Office ability="assets.view"><AssetsPage /></Office>} />
               <Route path="/assets/:id" element={<Office ability="assets.view"><AssetDetail /></Office>} />
               <Route path="/reports" element={<Office ability="reports.view"><ReportsPage /></Office>} />
