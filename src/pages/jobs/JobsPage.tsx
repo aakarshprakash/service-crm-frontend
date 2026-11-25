@@ -335,7 +335,7 @@ export default function JobsPage() {
                   header: 'Call',
                   render: (j) => (
                     <div>
-                      <p className="font-medium text-slate-900">{j.crm_call_id}</p>
+                      <p className="whitespace-nowrap font-medium text-slate-900">{j.crm_call_id}</p>
                       <p className="text-xs text-slate-500">
                         {dateTime(j.created_at)} ·{' '}
                         {ageColours && ageBand(j, bands) ? <span className={cn('rounded px-1.5 py-0.5 font-medium', ageBand(j, bands)!.pill)}>{j.call_age_days}d old</span> : `${j.call_age_days ?? 0}d old`}
@@ -348,8 +348,9 @@ export default function JobsPage() {
                   key: 'customer',
                   header: 'Customer',
                   render: (j) => (
-                    <div className="min-w-0">
-                      <p className="truncate text-slate-900">{j.customer?.name}</p>
+                    // A table cell grows to fit its text, so a long name would widen the whole column: cap it and wrap to two lines.
+                    <div className="w-40 xl:w-48">
+                      <p className="line-clamp-2 break-words text-slate-900" title={j.customer?.name}>{j.customer?.name}</p>
                       <p className="text-xs text-slate-500">{j.customer?.phone}</p>
                     </div>
                   ),
