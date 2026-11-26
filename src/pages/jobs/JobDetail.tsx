@@ -15,6 +15,7 @@ import { RichTextView } from '@/components/RichText';
 import { Hint } from '@/components/tutorial';
 import { HardDeleteButton } from '@/components/HardDelete';
 import { EstimateStatusBadge } from '@/pages/estimates/estimateParts';
+import { JobSparesCard } from '@/pages/spares/JobSparesCard';
 import { JobStatusPanel, type JobDialog } from './JobStatusPanel';
 import {
   AssignDialog, CancelDialog, EditJobDialog, FollowUpDialog, PartPendingDialog, RejectCancelDialog, RejectResumeDialog, RescheduleDialog, SetModelDialog,
@@ -153,6 +154,7 @@ export default function JobDetail() {
             <div className="min-w-0 space-y-6">
               <ChargesCard job={job} />
               {can('estimates.view') && <EstimatesCard job={job} canCreate={can('estimates.manage')} />}
+              {can('spares.view') && <JobSparesCard ticket={job.crm_call_id} />}
               <JobInfoCard job={job} onEdit={editable ? () => setDialog('edit') : undefined} />
               <CustomerLocationCard job={job} canManage={manage} visitLat={lastVisit?.location_lat} visitLng={lastVisit?.location_lng} />
               <FeedbackCard job={job} canMark={can('jobs.manage')} />

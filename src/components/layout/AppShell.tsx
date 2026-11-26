@@ -118,7 +118,21 @@ function useNav(): NavSection[] {
       label: t('section.stock'),
       items: [
         { to: '/inventory', label: t('nav.inventory'), icon: icon(Boxes), show: can('inventory.view') },
-        { to: '/spares', label: t('nav.spares'), icon: icon(PackageCheck), show: can('spares.view') },
+        {
+          to: '/spares',
+          label: t('nav.spares'),
+          icon: icon(PackageCheck),
+          show: can('spares.view'),
+          // In the order the work goes: see where things stand, find a part, then each step, then reports.
+          children: [
+            { to: '/spares', label: t('nav.sparesOverview'), show: true, end: true },
+            { to: '/spares/register', label: t('nav.sparesRegister'), show: true },
+            { to: '/spares/inspection', label: t('nav.sparesInspection'), show: true, group: t('nav.groupSparesSteps') },
+            { to: '/spares/dispatch', label: t('nav.sparesDispatch'), show: true, group: t('nav.groupSparesSteps') },
+            { to: '/spares/billing', label: t('nav.sparesBilling'), show: true, group: t('nav.groupSparesSteps') },
+            { to: '/spares/reports', label: t('nav.sparesReports'), show: true, group: t('nav.groupSparesMore') },
+          ],
+        },
         { to: '/assets', label: t('nav.assets'), icon: icon(Hammer), show: can('assets.view') },
       ],
     },
