@@ -67,6 +67,8 @@ export interface SparesSummary {
   by_status: Record<Status, Pair>;
   by_class: Record<'warranty' | 'out_of_warranty' | 'charged' | 'stock' | 'none', Pair>;
   mismatch: Pair;
+  /** Inspected parts without an RMA / challan yet (step 2); the other pending_dispatch parts are in step 3. */
+  rma_missing: Pair;
   company_checked_on: string | null;
   last_billing_date: string | null;
   couriers: string[];
@@ -144,10 +146,13 @@ export function lifecycle(s: BrandSpare): { label: string; date?: string | null;
     ];
   }
   const returned = ['return_completed', 'replacement_completed'].includes(s.status);
+  const sent = s.status === 'pending_return' || returned;
   return [
     billed,
     { label: s.return_type === 'fresh' ? 'Fresh return ready' : 'Inspected', date: s.inspection_on, done: s.status !== 'pending_inspection' },
-    { label: 'Sent to Lloyd', date: s.lr_date, done: s.status === 'pending_return' || returned },
+    // Some parts went back without one; once sent, the step counts as passed.
+    { label: 'RMA / challan', date: s.rma_on, done: !!s.rma_no || sent },
+    { label: 'Sent to Lloyd', date: s.lr_date, done: sent },
     { label: 'Received by Lloyd', date: s.return_received_on, done: returned },
     { label: s.replacement_doc || s.replacement_on ? 'Replacement issued' : 'Completed', date: s.replacement_on, done: returned },
   ];
@@ -196,10 +201,11 @@ export function Breadcrumb({ items }: { items: { label: string; to?: string }[] 
 }
 
 /** The counts every SAPRE screen shows. */
-export function useSparesSummary(params: Record<string, string | undefined> = {}) {
+export function useSparesSummary(params: Record<string, string | undefined> = {}, enabled = true) {
   return useQuery({
     queryKey: ['spares', 'summary', params],
     queryFn: () => api.get<Envelope<SparesSummary>>('/spares/summary', params).then((r) => r.data),
+    enabled,
   });
 }
 

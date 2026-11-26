@@ -193,6 +193,7 @@ export default function App() {
               <Route path="/spares/inspection" element={<Office ability="spares.view"><SparesQueue key="inspection" queue="inspection" /></Office>} />
               <Route path="/spares/dispatch" element={<Office ability="spares.view"><SparesQueue key="dispatch" queue="dispatch" /></Office>} />
               <Route path="/spares/billing" element={<Office ability="spares.view"><SparesQueue key="billing" queue="billing" /></Office>} />
+              <Route path="/spares/ow-billing" element={<Office ability="spares.view"><SparesQueue key="ow" queue="ow" /></Office>} />
               <Route path="/spares/reports" element={<Office ability="spares.view"><SparesReports /></Office>} />
               <Route path="/spares/:id" element={<Office ability="spares.view"><SpareDetail /></Office>} />
               <Route path="/assets" element={<Office ability="assets.view"><AssetsPage /></Office>} />

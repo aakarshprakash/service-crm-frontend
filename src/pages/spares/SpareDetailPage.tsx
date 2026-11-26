@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Button, Card, QueryState } from '@/components/ui';
 import { ACTION, BulkDialog, SpareEditor, type BulkAction } from './SpareDialogs';
 import { NEXT_STEP } from './SpareTable';
+import { stepOf } from './sparesSteps';
 import { Breadcrumb, COVERAGE, CoverageBadge, Lifecycle, OW_STAGE, STATUS, StatusBadge, onOwPath, useSparesSummary, type BrandSpare } from './sparesParts';
 
 const TABS = [
@@ -92,14 +93,25 @@ const customerName = (s: BrandSpare) => s.customer_name ?? s.job?.customer?.name
 
 /** What to do next with this part, in words, with the one button that does it. */
 function NextStep({ spare: s, manage, onAction }: { spare: BrandSpare; manage: boolean; onAction: (a: BulkAction) => void }) {
-  const step = NEXT_STEP[s.status];
+  // Inspected without an RMA / challan: that comes before the courier.
+  const needsRma = s.status === 'pending_dispatch' && !s.rma_no;
+  const step = needsRma ? 'rma' : NEXT_STEP[s.status];
   const done = !step;
+  const at = stepOf(s);
   return (
     <Card>
-      <p className="text-xs font-medium text-slate-500">Next step</p>
+      {at ? (
+        <Link to={at.to} className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[10px] text-white" aria-hidden>{at.n}</span>
+          <span><span className="sr-only">Waiting at step {at.n}: </span>{at.title}</span>
+        </Link>
+      ) : (
+        <p className="text-xs font-medium text-emerald-700">All steps done</p>
+      )}
+      <p className="mt-3 text-xs font-medium text-slate-500">Next step</p>
       <div className="mt-1 flex items-start gap-2">
         {done ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden /> : <ArrowRight className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" aria-hidden />}
-        <p className="text-base font-semibold text-slate-900">{STATUS[s.status].next}</p>
+        <p className="text-base font-semibold text-slate-900">{needsRma ? 'Add the RMA / challan number' : STATUS[s.status].next}</p>
       </div>
       {s.company_pending && s.status === 'pending_return' && (
         <p className="mt-2 flex gap-1.5 text-sm text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />Lloyd's pending list still shows this part{s.company_checked_on ? ` (list of ${date(s.company_checked_on)})` : ''}.</p>

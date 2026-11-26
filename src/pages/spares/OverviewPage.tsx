@@ -14,7 +14,8 @@ import { Button, Card, EmptyState, Select, toast } from '@/components/ui';
 import { SpareEditor } from './SpareDialogs';
 import { UploadDialog, type UploadKind } from './UploadDialog';
 import { periodRange, PERIODS } from './sparesFilters';
-import { CoverageBadge, MODULE, STATUS, StatusBadge, useSparesSummary, type BrandSpare, type SparesSummary, type Status } from './sparesParts';
+import { CoverageBadge, MODULE, StatusBadge, useSparesSummary, type BrandSpare, type SparesSummary, type Status } from './sparesParts';
+import { StepBar } from './sparesSteps';
 
 /** Chart colours, validated as a set (blue, orange, aqua) with grey kept for "not sorted" and always labelled. */
 const CHART = { warranty: '#2a78d6', ow: '#eb6834', done: '#1baf7a', none: '#94a3b8' };
@@ -41,7 +42,7 @@ export default function OverviewPage() {
           <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 sm:flex" aria-hidden><PackageCheck className="h-6 w-6" /></span>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-navy-900 sm:text-[26px]">{MODULE}</h1>
-            <p className="mt-1 text-sm text-slate-500">Parts Lloyd billed to you: warranty returns, OW billing and where each part is now.</p>
+            <p className="mt-1 text-sm text-slate-500">Every spare part Lloyd bills you, from the bill to its return or payment.</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -62,6 +63,11 @@ export default function OverviewPage() {
           />
         </Card>
       ) : (
+        <>
+        <div className="mb-5">
+          <StepBar s={s} />
+          <Mismatch s={s} />
+        </div>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">
             <Kpis s={s} />
@@ -73,10 +79,10 @@ export default function OverviewPage() {
           </div>
           <div className="space-y-4">
             {manage && <QuickActions onUpload={setUpload} onAdd={() => setAdding(true)} />}
-            <WaitingFor s={s} />
             <RecentActivity items={recent.data} loading={recent.isLoading} />
           </div>
         </div>
+        </>
       )}
 
       <UploadDialog kind={upload} onClose={() => setUpload(null)} />
@@ -104,7 +110,7 @@ function Kpis({ s }: { s?: SparesSummary }) {
               <p className="text-2xl font-semibold tabular-nums text-slate-900">{c.count === undefined ? '–' : c.count.toLocaleString('en-IN')}</p>
             </div>
           </div>
-          <p className="mt-2 truncate text-xs text-slate-500">{c.value === undefined ? ' ' : `${moneyShort(c.value)}, ${c.hint}`}</p>
+          <p className="mt-2 line-clamp-2 text-xs text-slate-500">{c.value === undefined ? ' ' : `${moneyShort(c.value)}, ${c.hint}`}</p>
         </Link>
       ))}
     </div>
@@ -163,7 +169,7 @@ function ClassChart({ s }: { s?: SparesSummary }) {
   const rows = [
     { label: 'Warranty', key: 'warranty', color: CHART.warranty, to: '/spares/register?path=warranty' },
     { label: 'Out of warranty', key: 'out_of_warranty', color: CHART.ow, to: '/spares/register?coverage=out_of_warranty' },
-    { label: 'Warranty, billed as OW', key: 'charged', color: CHART.ow, to: '/spares/billing' },
+    { label: 'Warranty, billed as OW', key: 'charged', color: CHART.ow, to: '/spares/ow-billing' },
     { label: 'For stock', key: 'stock', color: CHART.done, to: '/spares/register?coverage=stock' },
     { label: 'Not sorted', key: 'none', color: CHART.none, to: '/spares/register?status=unsorted' },
   ] as const;
@@ -218,44 +224,15 @@ function QuickActions({ onUpload, onAdd }: { onUpload: (k: UploadKind) => void; 
   );
 }
 
-/** Every step still waiting, with its count, linking to the screen where it is done. */
-function WaitingFor({ s }: { s?: SparesSummary }) {
-  const rows: { status: Status; to: string; icon: ReactNode }[] = [
-    { status: 'unsorted', to: '/spares/inspection?status=unsorted', icon: <ScanSearch className="h-4 w-4" /> },
-    { status: 'pending_inspection', to: '/spares/inspection?status=pending_inspection', icon: <ScanSearch className="h-4 w-4" /> },
-    { status: 'pending_dispatch', to: '/spares/dispatch?status=pending_dispatch', icon: <Truck className="h-4 w-4" /> },
-    { status: 'pending_return', to: '/spares/dispatch?status=pending_return', icon: <Truck className="h-4 w-4" /> },
-    { status: 'ow_billing_pending', to: '/spares/billing?status=ow_billing_pending', icon: <ReceiptText className="h-4 w-4" /> },
-    { status: 'payment_pending', to: '/spares/billing?status=payment_pending', icon: <ReceiptText className="h-4 w-4" /> },
-  ];
-  const total = s?.pending.count;
+/** Sent parts Lloyd's pending list still shows: the one thing to chase with Lloyd. */
+function Mismatch({ s }: { s?: SparesSummary }) {
+  if (!s?.mismatch.count) return null;
   return (
-    <Card title={`Waiting for a step${total !== undefined ? ` (${total.toLocaleString('en-IN')})` : ''}`} padded={false}>
-      {s && s.mismatch.count > 0 && (
-        <Link to="/spares/dispatch?status=pending_return&attention=mismatch" className="flex items-start gap-2 border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-          <span><span className="font-semibold">{s.mismatch.count} sent parts</span> are still on Lloyd's pending list ({moneyShort(s.mismatch.value)}). Follow up with Lloyd.</span>
-        </Link>
-      )}
-      <ul className="divide-y divide-slate-100">
-        {rows.map((r) => {
-          const n = s?.by_status[r.status].count ?? 0;
-          return (
-            <li key={r.status}>
-              <Link to={r.to} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none">
-                <span className="text-slate-400" aria-hidden>{r.icon}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm text-slate-800">{STATUS[r.status].label}</span>
-                  <span className="block truncate text-xs text-slate-500">{STATUS[r.status].next}</span>
-                </span>
-                <span className={cn('min-w-[2.25rem] rounded-full px-2 py-0.5 text-center text-xs font-semibold tabular-nums', n ? STATUS[r.status].badge : 'bg-slate-50 text-slate-400')}>{s ? n.toLocaleString('en-IN') : '–'}</span>
-                <ChevronRight className="h-4 w-4 text-slate-300" aria-hidden />
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </Card>
+    <Link to="/spares/dispatch?status=pending_return&attention=mismatch" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+      <span className="flex-1"><span className="font-semibold">{s.mismatch.count} parts you sent</span> are still on Lloyd's pending list ({moneyShort(s.mismatch.value)}). Follow up with Lloyd.</span>
+      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+    </Link>
   );
 }
 

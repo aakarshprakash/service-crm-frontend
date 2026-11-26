@@ -17,6 +17,8 @@ import { PageGuide } from '@/components/tutorial';
 import { Logo, LogoMark, PoweredBy } from '@/components/brand';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { APP_VERSION, WhatsNew, useWhatsNew } from '@/components/whatsNew';
+import { useSparesSummary } from '@/pages/spares/sparesParts';
+import { STEPS, stepCount, type StepKey } from '@/pages/spares/sparesSteps';
 
 interface NavChild {
   to: string;
@@ -25,6 +27,10 @@ interface NavChild {
   end?: boolean;
   /** A small heading shown above the first item of each group inside the sub-menu. */
   group?: string;
+  /** Numbered step of a process, shown in a circle before the label. */
+  step?: number;
+  /** Items waiting there, shown after the label when above zero. */
+  count?: number;
 }
 
 interface NavItem {
@@ -45,9 +51,14 @@ interface NavSection {
 
 const icon = (C: typeof Home) => <C className="h-[18px] w-[18px] shrink-0" strokeWidth={1.9} />;
 
+const SPARE_STEP_LABEL: Record<StepKey, string> = { billing: 'nav.sparesBilling', inspection: 'nav.sparesInspection', dispatch: 'nav.sparesDispatch', ow: 'nav.sparesOwBilling' };
+
 function useNav(): NavSection[] {
   const { t } = useTranslation();
   const { user, can } = useAuth();
+  const { pathname } = useLocation();
+  // The step counts are only fetched while the SAPRE menu is open (on its pages).
+  const spares = useSparesSummary({}, !!user && can('spares.view') && pathname.startsWith('/spares')).data;
   if (!user) return [];
 
   if (user.role === 'super_admin') {
@@ -123,13 +134,11 @@ function useNav(): NavSection[] {
           label: t('nav.spares'),
           icon: icon(PackageCheck),
           show: can('spares.view'),
-          // In the order the work goes: see where things stand, find a part, then each step, then reports.
+          // In the order the work goes: see where things stand, find a part, then the numbered steps, then reports.
           children: [
             { to: '/spares', label: t('nav.sparesOverview'), show: true, end: true },
             { to: '/spares/register', label: t('nav.sparesRegister'), show: true },
-            { to: '/spares/inspection', label: t('nav.sparesInspection'), show: true, group: t('nav.groupSparesSteps') },
-            { to: '/spares/dispatch', label: t('nav.sparesDispatch'), show: true, group: t('nav.groupSparesSteps') },
-            { to: '/spares/billing', label: t('nav.sparesBilling'), show: true, group: t('nav.groupSparesSteps') },
+            ...STEPS.map((st) => ({ to: st.to, label: t(SPARE_STEP_LABEL[st.key]), show: true, step: st.n, count: stepCount(st.key, spares), group: t('nav.groupSparesSteps') })),
             { to: '/spares/reports', label: t('nav.sparesReports'), show: true, group: t('nav.groupSparesMore') },
           ],
         },
@@ -261,10 +270,18 @@ function NavGroup({ item, collapsed, onExpand }: { item: NavItem; collapsed: boo
               to={c.to}
               end={c.end}
               className={({ isActive }) =>
-                cn('block truncate rounded-md px-3 py-1.5 text-[13px] transition-colors', isActive ? 'bg-white/[0.08] font-medium text-white' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white')
+                cn('flex items-center gap-2 rounded-md py-1.5 text-[13px] transition-colors', c.step ? 'pl-1.5 pr-2' : 'px-3', isActive ? 'bg-white/[0.08] font-medium text-white' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white')
               }
             >
-              {c.label}
+              {({ isActive }) => (
+                <>
+                  {c.step !== undefined && (
+                    <span aria-hidden className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums', isActive ? 'bg-brand-500 text-white' : 'bg-white/10 text-slate-300')}>{c.step}</span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{c.step !== undefined && <span className="sr-only">Step {c.step}: </span>}{c.label}</span>
+                  {!!c.count && <span className="shrink-0 rounded-full bg-amber-400/15 px-1.5 text-[11px] font-semibold tabular-nums text-amber-200" title={`${c.count} waiting`}>{c.count.toLocaleString('en-IN')}</span>}
+                </>
+              )}
             </NavLink>
             </Fragment>
           ))}
