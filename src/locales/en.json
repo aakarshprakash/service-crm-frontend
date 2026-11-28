@@ -76,6 +76,7 @@
     "trial_one": "Free trial · {{count}} day left. Contact us to activate your subscription.",
     "trial_other": "Free trial · {{count}} days left. Contact us to activate your subscription."
   },
+  "quick": {"new":"New","open":"Quick actions","job":"New job card","jobHint":"Log a complaint and send a technician","expense":"Add expense","expenseHint":"Fuel, rent, purchases and more","bill":"Walk-in bill","billHint":"Bill a customer at the counter","techReport":"Technician job report","techReportHint":"Each technician’s visits with locations on the map"},
   "punch": { "in": "Punch in", "out": "Punch out" },
   "notifications": {
     "title": "Notifications",

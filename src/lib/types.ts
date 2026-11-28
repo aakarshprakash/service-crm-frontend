@@ -810,7 +810,7 @@ export interface NotificationItem {
 export interface ReportColumn {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'quantity' | 'money' | 'date' | 'datetime';
+  type: 'text' | 'number' | 'quantity' | 'money' | 'date' | 'datetime' | 'location';
 }
 
 export interface ReportData {

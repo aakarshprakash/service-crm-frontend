@@ -14,7 +14,7 @@ import { Hint } from '@/components/tutorial';
 interface ReportMeta { key: string; title: string; description: string; financial: boolean }
 interface ExportRow { id: number; title: string; format: string; status: string; created_at: string; error: string | null }
 
-const NEEDS_DATES = new Set(['jobs', 'technician-performance', 'revenue', 'cash-collection', 'cash-close', 'inventory-consumption', 'detailed-summary', 'expenses', 'profit-loss', 'day-book', 'walk-in-sales']);
+const NEEDS_DATES = new Set(['jobs', 'technician-performance', 'technician-jobs', 'revenue', 'cash-collection', 'cash-close', 'inventory-consumption', 'detailed-summary', 'expenses', 'profit-loss', 'day-book', 'walk-in-sales']);
 
 export default function ReportsPage() {
   const [params, setParams] = useSearchParams();
@@ -89,7 +89,7 @@ function ReportViewer({ reportKey, meta, onBack }: { reportKey: string; meta?: R
     }
   };
 
-  const showTech = ['jobs', 'technician-performance', 'revenue', 'cash-collection', 'cash-close', 'inventory-consumption', 'detailed-summary'].includes(reportKey);
+  const showTech = ['jobs', 'technician-performance', 'technician-jobs', 'revenue', 'cash-collection', 'cash-close', 'inventory-consumption', 'detailed-summary'].includes(reportKey);
   const showType = ['inventory-stock', 'low-stock', 'inventory-valuation', 'inventory-consumption'].includes(reportKey);
 
   return (
@@ -255,6 +255,13 @@ function formatCell(v: unknown, c: ReportColumn) {
       return qty(Number(v));
     case 'number':
       return typeof v === 'number' ? v.toLocaleString('en-IN') : String(v);
+    case 'location':
+      // "lat, lng": opens the spot in Google Maps.
+      return (
+        <a href={`https://www.google.com/maps?q=${encodeURIComponent(String(v).replace(/s+/g, ''))}`} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 hover:underline">
+          Map ↗<span className="ml-1 text-xs font-normal text-slate-400">{String(v)}</span>
+        </a>
+      );
     default:
       return String(v);
   }

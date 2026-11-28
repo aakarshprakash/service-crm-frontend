@@ -16,6 +16,7 @@ import { Avatar, Button, SearchInput, Spinner, toast } from '@/components/ui';
 import { PageGuide } from '@/components/tutorial';
 import { Logo, LogoMark, PoweredBy } from '@/components/brand';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { QuickActions } from './QuickActions';
 import { APP_VERSION, WhatsNew, useWhatsNew } from '@/components/whatsNew';
 
 interface NavChild {
@@ -423,6 +424,7 @@ export function AppShell() {
           </Link>
           {user?.role !== 'super_admin' && <GlobalSearch />}
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+            {!isTech && user?.role !== 'super_admin' && <QuickActions />}
             {!isTech && user?.role !== 'super_admin' && user?.abilities.includes('punch') && <PunchButton />}
             <LanguageSwitcher className="hidden sm:block" />
             {user?.role !== 'super_admin' && <NotificationBell />}
