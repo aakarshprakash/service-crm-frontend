@@ -170,7 +170,7 @@ export default function JobsPage() {
         )}
         {/* Search, sort and the two menus everything else lives in */}
         <div className="flex flex-col gap-2 px-3 pt-3 sm:flex-row sm:items-center">
-          <SearchInput value={filters.search ?? ''} onChange={(v) => setFilter('search', v)} placeholder="Search call ID, phone, serial, model, name or category" className="sm:max-w-xl sm:flex-1" />
+          <SearchInput value={filters.search ?? ''} onChange={(v) => setFilter('search', v)} placeholder="Search CRM no. or call ID, customer CRM ID, phone, serial, model or name" className="sm:max-w-xl sm:flex-1" />
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <Select value={filters.sort ?? ''} onChange={(e) => setFilter('sort', e.target.value)} className="!w-40" aria-label="Sort by">
               <option value="">Newest first</option>
