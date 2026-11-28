@@ -1,8 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from '@/locales/en.json';
-import hi from '@/locales/hi.json';
-import ml from '@/locales/ml.json';
 
 /** Languages the web app ships with. Add locales/<code>.json and an entry here to add one. */
 export const LANGUAGES = [
@@ -28,9 +26,26 @@ function initialLanguage(): LanguageCode {
   return supported(browser) ? browser : 'en';
 }
 
+// English is built in; Hindi and Malayalam are downloaded only by people who use them.
+const LOADERS: Record<Exclude<LanguageCode, 'en'>, () => Promise<{ default: Record<string, unknown> }>> = {
+  hi: () => import('@/locales/hi.json'),
+  ml: () => import('@/locales/ml.json'),
+};
+
+async function load(code: LanguageCode): Promise<void> {
+  if (code === 'en' || i18n.hasResourceBundle(code, 'translation')) return;
+  try {
+    const bundle = await LOADERS[code]();
+    i18n.addResourceBundle(code, 'translation', bundle.default, true, true);
+  } catch {
+    /* offline or a failed download: English stays */
+  }
+}
+
+const first = initialLanguage();
 void i18n.use(initReactI18next).init({
-  resources: { en: { translation: en }, hi: { translation: hi }, ml: { translation: ml } },
-  lng: initialLanguage(),
+  resources: { en: { translation: en } },
+  lng: first,
   fallbackLng: 'en', // any key missing in hi / ml shows the English text
   interpolation: { escapeValue: false }, // React already escapes
 });
@@ -45,8 +60,11 @@ i18n.on('languageChanged', (lng) => {
   }
 });
 
+/** Resolves once the starting language is ready, so the first screen doesn't flash in English. */
+export const i18nReady: Promise<void> = load(first).then(() => i18n.changeLanguage(first)).then(() => undefined);
+
 export function setLanguage(code: LanguageCode) {
-  void i18n.changeLanguage(code);
+  void load(code).then(() => i18n.changeLanguage(code));
 }
 
 export default i18n;

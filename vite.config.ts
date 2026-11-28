@@ -25,10 +25,16 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router'],
-          query: ['@tanstack/react-query'],
-          charts: ['recharts'],
+        // By package path, not by entry name: listing 'recharts' as an entry also pulled the small helpers it shares
+        // with the app (clsx…) into the charts chunk, so every page, even sign-in, downloaded 500 KB of charts.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/.test(id)) return 'react';
+          if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) return 'query';
+          // Small helpers used by the app and by the charts: a chunk of their own, or the charts would come with them.
+          if (/[\\/]node_modules[\\/](clsx|tailwind-merge)[\\/]/.test(id)) return 'ui';
+          if (/[\\/]node_modules[\\/](recharts|recharts-scale|react-smooth|victory-vendor|d3-[^\\/]+|internmap|decimal\.js-light|eventemitter3|lodash|fast-equals|react-is|tiny-invariant)[\\/]/.test(id)) return 'charts';
+          return undefined;
         },
       },
     },

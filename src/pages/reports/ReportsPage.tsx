@@ -261,7 +261,12 @@ function formatCell(v: unknown, c: ReportColumn) {
 }
 
 function ExportsDialog({ onClose }: { onClose: () => void }) {
-  const q = useQuery({ queryKey: ['exports'], queryFn: () => api.get<Envelope<ExportRow[]>>('/reports/exports').then((r) => r.data), refetchInterval: 5000 });
+  // Checks every few seconds only while an export is still being prepared.
+  const q = useQuery({
+    queryKey: ['exports'],
+    queryFn: () => api.get<Envelope<ExportRow[]>>('/reports/exports').then((r) => r.data),
+    refetchInterval: (query) => (query.state.data?.some((e) => e.status !== 'ready' && e.status !== 'failed') ? 5000 : false),
+  });
   return (
     <Modal open onClose={onClose} size="lg" title="My exports" description="Large reports are generated in the background and kept for 7 days.">
       {!q.data?.length ? (
