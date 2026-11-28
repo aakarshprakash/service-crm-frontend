@@ -31,7 +31,9 @@ const IncomePage = lazy(() => import('@/pages/expenses/IncomePage'));
 const RegisterPage = lazy(() => import('@/pages/accounts/RegisterPage'));
 const ExpenseClaimsPage = lazy(() => import('@/pages/expenses/ExpenseClaimsPage'));
 const ShareLocation = lazy(() => import('@/pages/public/ShareLocation'));
-const BooksPage = lazy(() => import('@/pages/books/BooksPage'));
+const LedgerPage = lazy(() => import('@/pages/accounts/LedgerPage'));
+const EnquiriesPage = lazy(() => import('@/pages/enquiries/EnquiriesPage'));
+const EnquiryDetail = lazy(() => import('@/pages/enquiries/EnquiryDetail'));
 const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage'));
 const AssetDetail = lazy(() => import('@/pages/assets/AssetDetail'));
 const AccountsPage = lazy(() => import('@/pages/accounts/AccountsPage'));
@@ -39,7 +41,6 @@ const CashCloseDetail = lazy(() => import('@/pages/accounts/CashCloseDetail'));
 const AccountsOverview = lazy(() => import('@/pages/accounts/AccountsOverview'));
 const ReceivablesPage = lazy(() => import('@/pages/accounts/ReceivablesPage'));
 const ReceiptsPage = lazy(() => import('@/pages/accounts/ReceiptsPage'));
-const CashBankPage = lazy(() => import('@/pages/accounts/CashBankPage'));
 const ProfitLossPage = lazy(() => import('@/pages/accounts/ProfitLossPage'));
 const HrToday = lazy(() => import('@/pages/hr/HrToday'));
 const TripsPage = lazy(() => import('@/pages/hr/TripsPage'));
@@ -114,6 +115,23 @@ function Home() {
 }
 
 
+/**
+ * Cash & bank and the day book became parts of the ledger: old links and bookmarks land on the same view there.
+ * ?book=cash|bank → that account, ?book=transfers → Cash, ?opening=1 → opening balances; the period is kept.
+ */
+function LegacyBooks({ dayBook }: { dayBook?: boolean }) {
+  const { search } = useLocation();
+  const old = new URLSearchParams(search);
+  const next = new URLSearchParams();
+  for (const k of ['from', 'to', 'branch_id']) if (old.get(k)) next.set(k, old.get(k)!);
+  if (dayBook) next.set('tab', 'day-book');
+  else if (old.get('book') === 'bank') next.set('account', 'bank');
+  if (old.get('opening') === '1') next.set('opening', '1');
+  if (old.get('book') === 'register') return <Navigate to={`/accounts/register${old.get('day') ? `?day=${old.get('day')}` : ''}`} replace />;
+  const q = next.toString();
+  return <Navigate to={`/accounts/ledger${q ? `?${q}` : ''}`} replace />;
+}
+
 /** /accounts/:id used to be a cash close; send old bookmarks to its new address. */
 function LegacyCashClose() {
   const { pathname } = useLocation();
@@ -142,6 +160,8 @@ export default function App() {
               <Route path="/profile" element={<ProfilePage />} />
 
               <Route path="/dashboard" element={<Office ability="dashboard.view"><Dashboard /></Office>} />
+              <Route path="/enquiries" element={<Office ability="enquiries.view"><EnquiriesPage /></Office>} />
+              <Route path="/enquiries/:id" element={<Office ability="enquiries.view"><EnquiryDetail /></Office>} />
               <Route path="/jobs" element={<Office ability="jobs.view"><JobsPage /></Office>} />
               <Route path="/jobs/new" element={<Office ability="jobs.manage"><JobCreate /></Office>} />
               <Route path="/jobs/:id" element={<Office ability="jobs.view"><JobDetail /></Office>} />
@@ -163,15 +183,16 @@ export default function App() {
               <Route path="/accounts/income" element={<Office ability="expenses.manage"><IncomePage /></Office>} />
               <Route path="/accounts/expenses" element={<Office ability="expenses.manage"><ExpensesPage /></Office>} />
               <Route path="/accounts/expense-claims" element={<Office ability="expenses.manage"><ExpenseClaimsPage /></Office>} />
-              <Route path="/accounts/cash-bank" element={<Office ability="accounts.view"><CashBankPage /></Office>} />
-              <Route path="/accounts/books" element={<Office ability="accounts.view"><BooksPage /></Office>} />
+              <Route path="/accounts/ledger" element={<Office ability="accounts.view"><LedgerPage /></Office>} />
+              <Route path="/accounts/cash-bank" element={<LegacyBooks />} />
+              <Route path="/accounts/books" element={<LegacyBooks dayBook />} />
               <Route path="/accounts/profit-loss" element={<Office ability="accounts.view"><ProfitLossPage /></Office>} />
               <Route path="/accounts/cash-close" element={<Office ability="cash.verify"><AccountsPage /></Office>} />
               <Route path="/accounts/cash-close/:id" element={<Office ability="cash.verify"><CashCloseDetail /></Office>} />
               {/* Pre-2.1 links */}
               <Route path="/accounts/:id" element={<LegacyCashClose />} />
               <Route path="/expenses" element={<Navigate to="/accounts/expenses" replace />} />
-              <Route path="/books" element={<Navigate to="/accounts/books" replace />} />
+              <Route path="/books" element={<LegacyBooks dayBook />} />
 
               {/* Workforce (attendance, trips, leave, payroll) */}
               <Route path="/hr/trips" element={<Office ability="hr.view"><TripsPage /></Office>} />

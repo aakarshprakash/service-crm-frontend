@@ -16,6 +16,18 @@ export interface Guide {
 
 const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
   {
+    id: 'enquiries',
+    pattern: '/enquiries',
+    title: 'Enquiries',
+    intro: 'Every lead in one list: someone asking about a repair (service) or about buying something (sales).',
+    points: [
+      'Log an enquiry while you are on the call. A phone number that is already a customer is linked by itself.',
+      'Set a follow-up date: Due today and Overdue show who to call back first.',
+      'Open an enquiry to add follow-up notes, then Book a job or Make a quotation. The enquiry is marked converted when the job is booked or the quotation accepted.',
+      'Mark it lost with the reason, so you can see later why customers went elsewhere.',
+    ],
+  },
+  {
     id: 'dashboard',
     pattern: '/dashboard',
     title: 'Dashboard',
@@ -154,14 +166,27 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
     ],
   },
   {
-    id: 'books',
-    pattern: '/accounts/books',
-    title: 'Day book',
-    intro: 'Every payment received and every expense paid, in order, for the period you choose.',
+    id: 'register',
+    pattern: '/accounts/register',
+    title: 'Daily register',
+    intro: 'The accountant’s day on one screen, laid out like the paper register.',
     points: [
-      'Income is payments actually received, on job invoices and walk-in bills. Unpaid invoices are not counted until they are paid.',
-      'Daily income vs expenses charts the same period day by day.',
-      'Export it from Reports → Day Book.',
+      '“Waiting for you” lists technicians’ cash handovers and staff expense claims. Count & take checks a handover and puts the cash in the office (or the bank) in one step.',
+      'Bill payment, Other money received, Expense paid and Cash ↔ bank record anything for the day on screen.',
+      'Received and Paid each have a Cash and a Bank / UPI column. A technician’s cash counts on the day the customer paid.',
+      'At the end of the day, Count cash and close locks the day’s office entries.',
+    ],
+  },
+  {
+    id: 'ledger',
+    pattern: '/accounts/ledger',
+    title: 'Ledger',
+    intro: 'Every entry posted to its account by double entry, as in an accounting package.',
+    points: [
+      'Bills post to Customers and to Sales (before GST) and GST payable, on the bill date. Payments move money from Customers to Cash or Bank.',
+      'Pick an account on the left to see its entries with a running Dr / Cr balance. Customers opens one ledger per customer.',
+      'Trial balance lists every account; its debit and credit totals always agree.',
+      'Day book is every rupee in and out, in date order. Opening balances and Cash ↔ bank are in the buttons at the top.',
     ],
   },
   {
@@ -170,7 +195,7 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
     title: 'Accounts',
     intro: 'Your business money at a glance. Everything is on a cash basis: income counts when it is received.',
     points: [
-      'Cash in hand and Bank & UPI are running balances: set your opening balances once under Cash & bank.',
+      'Office cash, Bank & UPI and cash with technicians are separate, so nothing is counted twice. Set your opening balances once under Ledger.',
       'Receivable is what customers still owe; click it to see who and for how long.',
       'Cash with technicians is money collected in the field but not yet handed in at the daily cash close.',
     ],
@@ -191,17 +216,6 @@ const guides: (Guide & { pattern: string; roles?: Role[] })[] = [
     title: 'Receipts',
     intro: 'Every payment received: at the office, by technicians in the field and online.',
     points: ['Filter by method or by who collected it. Export the full register from Reports → Receipts Register.'],
-  },
-  {
-    id: 'cash-bank',
-    pattern: '/accounts/cash-bank',
-    title: 'Cash & bank',
-    intro: 'The cash book and bank book, with a running balance after every entry.',
-    points: [
-      'Cash receipts and cash expenses post to the cash book; UPI, cheque, bank transfer and online ones post to the bank book.',
-      'Deposit / withdraw moves money between them when you bank cash or draw it, without counting as income or expense.',
-      'Opening balances: what you had on the day you started keeping books here.',
-    ],
   },
   {
     id: 'profit-loss',

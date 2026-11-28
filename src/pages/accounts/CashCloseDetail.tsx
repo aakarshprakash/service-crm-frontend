@@ -134,7 +134,7 @@ function VerifyDialog({ close, onClose }: { close: CashClose; onClose: () => voi
   const [remarks, setRemarks] = useState('');
   const diff = toMinor(amount) - close.expected_in_hand;
   const m = useApiMutation(() => api.patch(`/accounts/cash-close/${close.id}/verify`, { amount_verified: toMinor(amount), discrepancy_remarks: remarks || null }), {
-    invalidate: [['cash-close', String(close.id)], ['cash-closes'], ['cash-overview']],
+    invalidate: [['cash-close', String(close.id)], ['cash-closes'], ['cash-overview'], ['books']],
     toastValidation: false,
     onSuccess: onClose,
   });
@@ -175,7 +175,7 @@ function VerifyDialog({ close, onClose }: { close: CashClose; onClose: () => voi
 function DepositDialog({ close, onClose }: { close: CashClose; onClose: () => void }) {
   const [form, setForm] = useState({ amount: toMajor(close.closing_balance), deposited_to: 'bank', reference_no: '', deposit_date: today(), remarks: '' });
   const m = useApiMutation(() => api.post(`/accounts/cash-close/${close.id}/deposit`, { ...form, amount: toMinor(form.amount), reference_no: form.reference_no || null }), {
-    invalidate: [['cash-close', String(close.id)], ['cash-closes'], ['cash-overview']],
+    invalidate: [['cash-close', String(close.id)], ['cash-closes'], ['cash-overview'], ['books']],
     toastValidation: false,
     onSuccess: onClose,
   });

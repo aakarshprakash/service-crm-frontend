@@ -7,6 +7,7 @@ import { api, download, type Envelope } from '@/lib/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { fieldError, useApiMutation, useLookups } from '@/lib/hooks';
 import { date, dateTime, money, qty, toMajor, toMinor } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { Invoice } from '@/lib/types';
 import { Badge, Button, Card, DataTable, Field, Input, Modal, PageHeader, QueryState, Select, Textarea, toast } from '@/components/ui';
 import { MethodLabel, StatusBadge } from '@/components/domain';
@@ -52,9 +53,9 @@ export default function InvoiceDetail() {
               <>
                 {inv.source === 'walk_in' && <HardDeleteButton type="invoice" id={inv.id} label="Delete bill" onDeleted={() => navigate('/invoices', { replace: true })} />}
                 {can('invoices.change_bill_type') && (inv.is_gst || lookups?.billing.gst_registered) && (
-                  <Hint text={inv.prices_include_gst === false ? 'Switches this bill between GST and non-GST. GST is added on top of these prices, so the total changes.' : 'Switches this bill between GST and non-GST. The total stays the same.'}>
+                  <Hint text="Make this a GST bill (with GST included in the prices, or added on top), or a non-GST bill. You see the new total before anything changes.">
                     <Button variant="secondary" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setChangingType(true)}>
-                      {inv.is_gst ? 'Make non-GST' : 'Make GST bill'}
+                      {inv.is_gst ? 'Change GST' : 'Make GST bill'}
                     </Button>
                   </Hint>
                 )}
@@ -255,40 +256,98 @@ function VisitRows({ v }: { v: NonNullable<NonNullable<Invoice['job']>['visits']
   );
 }
 
+type BillKind = 'non_gst' | 'gst_inclusive' | 'gst_exclusive';
+interface BillOption { is_gst: boolean; prices_include_gst: boolean; total: number; taxable: number; tax: number; paid: number; due: number; current: boolean }
+
+const KINDS: { key: BillKind; title: string; text: string }[] = [
+  { key: 'gst_inclusive', title: 'GST included in the prices', text: 'The prices already contain the GST. The total stays the same; the bill shows the tax inside it.' },
+  { key: 'gst_exclusive', title: 'GST added on top', text: 'GST is added on top of the prices, so the total goes up and the customer owes the GST too.' },
+  { key: 'non_gst', title: 'Non-GST bill', text: 'A plain bill with no GST shown.' },
+];
+
 /**
- * GST inclusive: the customer's total doesn't change, only whether tax is split out on the bill.
- * GST exclusive (counter bills): the GST on top comes or goes, so the total and the balance move.
+ * Choose what kind of bill this is: GST with the tax included in the prices, GST added on top, or non-GST.
+ * Each choice shows the total and what is still due before anything is saved.
  */
 function ChangeBillType({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
-  const toGst = !invoice.is_gst;
-  const onTop = invoice.prices_include_gst === false;
-  const typed = invoice.total_service_charge + invoice.total_spare_charge - invoice.discount_amount;
+  const q = useQuery({
+    queryKey: ['invoice', String(invoice.id), 'bill-types'],
+    queryFn: () => api.get<Envelope<Partial<Record<BillKind, BillOption>>>>(`/invoices/${invoice.id}/bill-type`).then((r) => r.data),
+  });
+  const current = (Object.entries(q.data ?? {}) as [BillKind, BillOption][]).find(([, o]) => o.current)?.[0];
+  const [picked, setPicked] = useState<BillKind | null>(null);
+  const choice = picked ?? (current === 'non_gst' ? 'gst_inclusive' : current) ?? null;
+  const option = choice ? q.data?.[choice] : undefined;
+  const now = current ? q.data?.[current] : undefined;
   const m = useApiMutation((body: object) => api.post<{ message?: string }>(`/invoices/${invoice.id}/bill-type`, body), {
-    invalidate: [['invoice', String(invoice.id)], ['invoices']],
+    invalidate: [['invoice', String(invoice.id)], ['invoices'], ['books']],
     onSuccess: onClose,
   });
+  const moves = option && now ? option.total - now.total : 0;
+
   return (
     <Modal
       open
+      size="lg"
       onClose={onClose}
-      title={toGst ? 'Make this a GST bill?' : 'Make this a non-GST bill?'}
+      title="GST on this bill"
+      description={`${invoice.invoice_number} · now ${!invoice.is_gst ? 'a non-GST bill' : invoice.prices_include_gst === false ? 'GST added on top' : 'GST included in the prices'}`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>Go back</Button>
-          <Button loading={m.isPending} onClick={() => m.mutate({ is_gst: toGst })}>{toGst ? 'Make GST bill' : 'Make non-GST'}</Button>
+          <Button variant="secondary" onClick={onClose}>
+            Go back
+          </Button>
+          <Button loading={m.isPending} disabled={!option || option.current} onClick={() => option && m.mutate({ is_gst: option.is_gst, prices_include_gst: option.is_gst ? option.prices_include_gst : null })}>
+            {option?.current ? 'No change' : choice === 'non_gst' ? 'Make non-GST' : invoice.is_gst ? 'Apply' : 'Make GST bill'}
+          </Button>
         </>
       }
     >
-      <p className="text-sm text-slate-700">
-        {!onTop ? (
-          <>The total stays <strong>{money(invoice.total_amount)}</strong>. {toGst ? 'The bill will show the GST included in that amount.' : 'The bill will no longer show any GST.'}</>
-        ) : toGst ? (
-          <>GST is added on top of <strong>{money(typed)}</strong>, so the total goes up and the customer owes the GST as well.</>
-        ) : (
-          <>The GST added on top is removed. The total goes down to <strong>{money(typed)}</strong>.</>
+      <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
+        <div className="space-y-2" role="radiogroup" aria-label="Kind of bill">
+          {KINDS.filter((k) => q.data?.[k.key]).map((k) => {
+            const o = q.data![k.key]!;
+            const on = choice === k.key;
+            return (
+              <button
+                key={k.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setPicked(k.key)}
+                className={cn(
+                  'flex w-full items-start justify-between gap-4 rounded-xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                  on ? 'border-brand-600 bg-brand-50' : 'border-slate-200 hover:border-slate-300',
+                )}
+              >
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    {k.title}
+                    {o.current && <Badge tone="slate">Now</Badge>}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{k.text}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-base font-bold tabular-nums text-navy-900">{money(o.total)}</span>
+                  <span className="block text-xs tabular-nums text-slate-500">{o.tax ? `incl. ${money(o.tax)} GST` : 'no GST'}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {option && !option.current && (
+          <p className={cn('mt-4 rounded-lg p-3 text-sm', moves > 0 ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-700')}>
+            {moves > 0 ? (
+              <>The total goes up by <strong>{money(moves)}</strong> to {money(option.total)}. </>
+            ) : moves < 0 ? (
+              <>The total goes down by <strong>{money(-moves)}</strong> to {money(option.total)}. </>
+            ) : (
+              <>The total stays <strong>{money(option.total)}</strong>. </>
+            )}
+            {option.paid > 0 ? <>Paid so far {money(option.paid)}; still due {money(option.due)}.</> : <>Still due {money(option.due)}.</>} If the customer already has a copy, give them the new one.
+          </p>
         )}
-      </p>
-      <p className="mt-2 text-sm text-slate-500">If you already gave the customer a copy, give them the new one.</p>
+      </QueryState>
     </Modal>
   );
 }

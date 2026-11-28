@@ -6,6 +6,7 @@ import { fieldError, useApiMutation, useListQuery, useStaffOptions } from '@/lib
 import { date, money } from '@/lib/format';
 import type { ExpenseClaim, ExpenseMethod } from '@/lib/types';
 import { Badge, Button, Card, DataTable, EmptyState, Field, FilterBar, Modal, PageHeader, Pagination, Select, StatCard, Tabs, Textarea } from '@/components/ui';
+import { MoneyOutTabs } from '@/pages/accounts/accountsTabs';
 
 const STATUS_TONE = { pending: 'amber', approved: 'green', rejected: 'red' } as const;
 const METHODS: [ExpenseMethod, string][] = [['cash', 'Cash'], ['upi', 'UPI'], ['bank_transfer', 'Bank transfer'], ['cheque', 'Cheque']];
@@ -23,15 +24,8 @@ export default function ExpenseClaimsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Staff expense claims"
-        description="What technicians and staff spent in the field. Approving a claim records it in Expenses."
-        back={
-          <Link to="/accounts/expenses" className="mb-2 inline-flex text-sm text-slate-500 hover:text-slate-700">
-            ← Expenses
-          </Link>
-        }
-      />
+      <PageHeader title="Expenses" description="What technicians and staff spent in the field and sent from the app. Approving a claim records it as an expense." />
+      <MoneyOutTabs current="claims" />
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Waiting for approval" value={meta?.pending_count ?? 0} tone="amber" />
         <StatCard label="Pending amount" value={money(meta?.pending_amount ?? 0)} tone="slate" />
@@ -134,7 +128,7 @@ export default function ExpenseClaimsPage() {
   );
 }
 
-function DecideDialog({ claim, action, onClose }: { claim: ExpenseClaim; action: 'approve' | 'reject'; onClose: () => void }) {
+export function DecideDialog({ claim, action, onClose }: { claim: ExpenseClaim; action: 'approve' | 'reject'; onClose: () => void }) {
   const [method, setMethod] = useState<ExpenseMethod>('cash');
   const [note, setNote] = useState('');
   const approve = action === 'approve';

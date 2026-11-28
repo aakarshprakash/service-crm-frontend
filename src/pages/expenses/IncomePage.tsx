@@ -7,6 +7,7 @@ import type { ExpenseMethod, Income } from '@/lib/types';
 import { Button, Card, ConfirmDialog, DataTable, EmptyState, Field, FilterBar, Input, Modal, PageHeader, Pagination, SearchInput, Select, StatCard, Textarea } from '@/components/ui';
 import { MethodLabel } from '@/components/domain';
 import { HardDeleteButton } from '@/components/HardDelete';
+import { MoneyInTabs } from '@/pages/accounts/accountsTabs';
 
 const METHODS: ExpenseMethod[] = ['cash', 'upi', 'cheque', 'bank_transfer'];
 const methodName = (m: string) => (m === 'bank_transfer' ? 'Bank transfer' : m === 'upi' ? 'UPI' : m[0]!.toUpperCase() + m.slice(1));
@@ -30,14 +31,15 @@ export default function IncomePage() {
   return (
     <>
       <PageHeader
-        title="Other income"
-        description="Money received without an invoice: service charges taken on the spot, parts sold over the counter, scrap, commission. Invoice payments are recorded on the invoice."
+        title="Money received"
+        description="Money received without a bill: service charges taken on the spot, parts sold over the counter, scrap, commission. Payments on a bill are recorded on the bill."
         actions={
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing('new')}>
             Add income
           </Button>
         }
       />
+      <MoneyInTabs current="other" />
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total (filtered)" value={money(total ?? 0)} tone="green" />
         {byCategory.slice(0, 3).map(([name, amount]) => (

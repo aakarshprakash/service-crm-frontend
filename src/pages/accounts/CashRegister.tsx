@@ -11,6 +11,8 @@ import { MethodLabel } from '@/components/domain';
 import { IncomeDialog } from '@/pages/expenses/IncomePage';
 import { ExpenseDialog } from '@/pages/expenses/ExpensesPage';
 import { OfficeCloseBand, type OfficeClose } from './OfficeDayClose';
+import { PaymentPicker } from './AccountsOverview';
+import { TransferDialog } from './bookDialogs';
 
 type Pair = { cash: number; bank: number };
 /** A payment on an invoice, or income received without one (income_id set, no invoice). */
@@ -115,7 +117,7 @@ export function CashRegister({ day, onDay }: { day: string; onDay: (d: string) =
                 </span>
                 <span className="block text-sm font-semibold">{asDate(date).getDate()}</span>
                 <span className={cn('block truncate text-[11px] tabular-nums', on ? 'text-white/80' : x && !x.empty ? 'text-emerald-700' : 'text-slate-400')}>
-                  {future ? '' : !x ? '…' : x.empty ? 'Nothing' : moved ? `+${money(moved).replace(/\.00$/, '')}` : 'Paid out only'}
+                  {future ? '' : !x ? '…' : x.empty ? (x.handovers?.length ? 'Cash handed in' : 'Nothing') : moved ? `+${money(moved).replace(/\.00$/, '')}` : 'Paid out only'}
                 </span>
               </button>
             );
@@ -254,7 +256,8 @@ function DayPage({ d, now }: { d: Day; now?: CashNow }) {
   // Bank deposits and withdrawals sit in both a Received and a Paid column: say so, or the totals look inflated.
   const moved = d.transfers.reduce((a, t) => a + t.cash_in + t.bank_in, 0);
   // The forms open over the register, dated the day on screen; saving refreshes this page.
-  const [adding, setAdding] = useState<'income' | 'expense' | null>(null);
+  const [adding, setAdding] = useState<'payment' | 'income' | 'expense' | 'transfer' | null>(null);
+  const isToday = d.date === today();
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card print:rounded-none print:border-0 print:shadow-none">
@@ -269,13 +272,22 @@ function DayPage({ d, now }: { d: Day; now?: CashNow }) {
               <Lock className="h-3.5 w-3.5" aria-hidden /> Day closed
             </span>
           )}
+          {/* Everything that goes into the register can be recorded from here, dated the day on screen. */}
+          {can('payments.record') && isToday && (
+            <Button variant="secondary" size="sm" icon={<HandCoins className="h-4 w-4 text-emerald-700" />} onClick={() => setAdding('payment')}>
+              Bill payment
+            </Button>
+          )}
           {can('expenses.manage') && !d.locked && (
             <>
               <Button variant="secondary" size="sm" icon={<ArrowDownLeft className="h-4 w-4 text-emerald-700" />} onClick={() => setAdding('income')}>
-                Add money received
+                Other money received
               </Button>
               <Button variant="secondary" size="sm" icon={<ArrowUpRight className="h-4 w-4 text-red-700" />} onClick={() => setAdding('expense')}>
-                Add money paid
+                Expense paid
+              </Button>
+              <Button variant="secondary" size="sm" icon={<ArrowLeftRight className="h-4 w-4 text-slate-500" />} onClick={() => setAdding('transfer')}>
+                Cash ↔ bank
               </Button>
             </>
           )}
@@ -320,7 +332,7 @@ function DayPage({ d, now }: { d: Day; now?: CashNow }) {
         </ul>
       )}
 
-      {d.empty ? (
+      {d.empty && !d.handovers?.length ? (
         <div className="px-5 py-14 text-center">
           <p className="font-semibold text-slate-900">Nothing was received or paid on this day</p>
           <p className="mt-1 text-sm text-slate-500">Payments technicians collect, bills paid at the office, and money received or paid appear here as they are recorded.</p>
@@ -393,6 +405,8 @@ function DayPage({ d, now }: { d: Day; now?: CashNow }) {
       <OfficeCloseBand date={d.date} close={d.office_close ?? null} locked={!!d.locked} isToday={d.date === today()} />
       {adding === 'income' && <IncomeDialog income={null} defaultDate={d.date} onClose={() => setAdding(null)} />}
       {adding === 'expense' && <ExpenseDialog expense={null} defaultDate={d.date} onClose={() => setAdding(null)} />}
+      {adding === 'transfer' && <TransferDialog defaultDate={d.date} onClose={() => setAdding(null)} />}
+      {adding === 'payment' && <PaymentPicker onClose={() => setAdding(null)} />}
     </article>
   );
 }

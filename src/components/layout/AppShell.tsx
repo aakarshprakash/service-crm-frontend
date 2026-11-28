@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useIsFetching, useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, Boxes, Building2, CalendarCheck, ChevronDown, ChevronsLeft, ChevronsRight, ClipboardList, CreditCard, FileBarChart, FileSignature, Gauge, Hammer, Home, Landmark,
+  Bell, Boxes, Building2, CalendarCheck, ChevronDown, ChevronsLeft, ChevronsRight, ClipboardList, CreditCard, FileBarChart, FileSignature, Gauge, Hammer, Home, Inbox, Landmark,
   LayoutDashboard, LogIn, LogOut, MapPin, Menu, Package, Receipt, Settings, ShieldCheck, Sparkles, UserCircle, Users, UsersRound, Wallet, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
@@ -25,6 +25,8 @@ interface NavChild {
   end?: boolean;
   /** A small heading shown above the first item of each group inside the sub-menu. */
   group?: string;
+  /** Other pages that belong to this item (its tabs), so it stays highlighted on them. */
+  also?: string[];
 }
 
 interface NavItem {
@@ -82,6 +84,7 @@ function useNav(): NavSection[] {
     {
       label: t('section.service'),
       items: [
+        { to: '/enquiries', label: t('nav.enquiries'), icon: icon(Inbox), show: can('enquiries.view') },
         { to: '/jobs', label: t('nav.jobs'), icon: icon(Wrench), show: can('jobs.view') },
         { to: '/service-locations', label: t('nav.serviceLocations'), icon: icon(MapPin), show: can('jobs.view') },
         { to: '/customers', label: t('nav.customers'), icon: icon(Users), show: can('customers.view') },
@@ -99,16 +102,14 @@ function useNav(): NavSection[] {
           show: accounts || can('cash.verify'),
           children: [
             // In the order a day goes: see where things stand, check the day, then money in, money out, and the books.
+            // The register is the day's desk: cash from technicians, claims, money in and out, and closing the day.
             { to: '/accounts', label: t('nav.accountsOverview'), show: accounts, end: true },
             { to: '/accounts/register', label: t('nav.dailyRegister'), show: accounts, group: t('nav.groupDaily') },
             { to: '/accounts/cash-close', label: t('nav.cashClose'), show: can('cash.verify'), group: t('nav.groupDaily') },
-            { to: '/accounts/receipts', label: t('nav.receipts'), show: can('payments.record'), group: t('nav.groupIn') },
-            { to: '/accounts/income', label: t('nav.income'), show: can('expenses.manage'), group: t('nav.groupIn') },
+            { to: can('payments.record') ? '/accounts/receipts' : '/accounts/income', label: t('nav.receipts'), show: can('payments.record') || can('expenses.manage'), group: t('nav.groupIn'), also: ['/accounts/income'] },
             { to: '/accounts/receivables', label: t('nav.receivables'), show: accounts, group: t('nav.groupIn') },
-            { to: '/accounts/expenses', label: t('nav.expenses'), show: can('expenses.manage'), group: t('nav.groupOut') },
-            { to: '/accounts/expense-claims', label: t('nav.expenseClaims'), show: can('expenses.manage'), group: t('nav.groupOut') },
-            { to: '/accounts/cash-bank', label: t('nav.cashBank'), show: accounts, group: t('nav.groupReports') },
-            { to: '/accounts/books', label: t('nav.dayBook'), show: accounts, group: t('nav.groupReports') },
+            { to: '/accounts/expenses', label: t('nav.expenses'), show: can('expenses.manage'), group: t('nav.groupOut'), also: ['/accounts/expense-claims'] },
+            { to: '/accounts/ledger', label: t('nav.ledger'), show: accounts, group: t('nav.groupReports') },
             { to: '/accounts/profit-loss', label: t('nav.profitLoss'), show: accounts, group: t('nav.groupReports') },
           ],
         },
@@ -246,7 +247,7 @@ function NavGroup({ item, collapsed, onExpand }: { item: NavItem; collapsed: boo
               to={c.to}
               end={c.end}
               className={({ isActive }) =>
-                cn('block truncate rounded-md px-3 py-1.5 text-[13px] transition-colors', isActive ? 'bg-white/[0.08] font-medium text-white' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white')
+                cn('block truncate rounded-md px-3 py-1.5 text-[13px] transition-colors', isActive || c.also?.some((p) => location.pathname.startsWith(p)) ? 'bg-white/[0.08] font-medium text-white' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white')
               }
             >
               {c.label}

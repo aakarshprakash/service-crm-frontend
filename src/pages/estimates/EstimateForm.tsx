@@ -55,6 +55,9 @@ export default function EstimateForm() {
 
 function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estimate; job?: Job; customerId?: number }) {
   const navigate = useNavigate();
+  // Made from an enquiry: the enquiry follows this quotation and closes when the customer answers.
+  const [search] = useSearchParams();
+  const enquiryId = !estimate && search.get('enquiry_id') ? Number(search.get('enquiry_id')) : null;
   const qc = useQueryClient();
   const { data: lookups } = useLookups();
   const billing = lookups?.billing;
@@ -175,6 +178,7 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
       ...(isGst ? { customer_gstin: gstin || null } : {}),
       show_signature: showSignature,
       discount: discountMinor || 0,
+      ...(enquiryId ? { enquiry_id: enquiryId } : {}),
       items: lines.map((l) => ({
         type: l.type,
         item_id: l.item_id,
@@ -190,6 +194,7 @@ function Form({ estimate, job, customerId: startCustomerId }: { estimate?: Estim
       const res = estimate ? await api.patch<Envelope<Estimate> & { message?: string }>(`/estimates/${estimate.id}`, body) : await api.post<Envelope<Estimate> & { message?: string }>('/estimates', body);
       toast.success(res.message ?? 'Estimate saved.');
       qc.invalidateQueries({ queryKey: ['estimates'] });
+      if (enquiryId) qc.invalidateQueries({ queryKey: ['enquiries'] });
       qc.invalidateQueries({ queryKey: ['estimate', String(res.data.id)] });
       navigate(`/estimates/${res.data.id}`, { replace: true });
     } catch (err) {

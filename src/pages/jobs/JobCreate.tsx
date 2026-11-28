@@ -122,6 +122,18 @@ export default function JobCreate() {
   // Keeps a retry after a failed job save from creating the product twice.
   const createdUnit = useRef<{ id: number; saved: string } | null>(null);
 
+  // Booked from an enquiry: the enquiry is converted to this job, and its details become the complaint.
+  const enquiryId = params.get('enquiry_id') ? Number(params.get('enquiry_id')) : null;
+  const fromEnquiry = useQuery({
+    queryKey: ['enquiry', String(enquiryId)],
+    queryFn: () => api.get<Envelope<{ enquiry_number: string; details: string | null; product: string | null }>>(`/enquiries/${enquiryId}`).then((r) => r.data),
+    enabled: !!enquiryId,
+  });
+  useEffect(() => {
+    const e = fromEnquiry.data;
+    if (e) setJob((j) => ({ ...j, complaint_details: j.complaint_details || e.details || '', product_category: j.product_category || e.product || '' }));
+  }, [fromEnquiry.data]);
+
   // Preselect a customer when coming from the customer page.
   const preset = params.get('customer_id');
   useEffect(() => {
@@ -227,6 +239,7 @@ export default function JobCreate() {
         auto_assign: autoAssign,
         crm_call_id: job.crm_call_id || null,
         scheduled_at: fromLocalInput(job.scheduled_at),
+        ...(enquiryId ? { enquiry_id: enquiryId } : {}),
       });
       // Auto-assign can fail (nobody covers the area / everyone at the limit); the job is still created.
       if (res.meta?.auto_assign && !res.meta.auto_assign.assigned) toast.info(res.message ?? 'Job created but not assigned.');
@@ -292,7 +305,7 @@ export default function JobCreate() {
           </Link>
         }
         title="New job card"
-        description="Log the customer’s complaint and send a technician."
+        description={fromEnquiry.data ? `From enquiry ${fromEnquiry.data.enquiry_number}. Saving the job marks the enquiry converted.` : 'Log the customer’s complaint and send a technician.'}
       />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-5 lg:col-span-2">

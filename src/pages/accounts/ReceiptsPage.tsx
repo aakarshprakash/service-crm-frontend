@@ -4,6 +4,7 @@ import { dateTime, money, monthStart, today } from '@/lib/format';
 import type { Named, Payment } from '@/lib/types';
 import { Button, Card, DataTable, EmptyState, FilterBar, Input, PageHeader, Pagination, SearchInput, Select, StatCard } from '@/components/ui';
 import { MethodLabel, StatusBadge } from '@/components/domain';
+import { MoneyInTabs } from './accountsTabs';
 
 type Receipt = Payment & { invoice?: { id: number; invoice_number: string; customer?: Named | null } | null };
 
@@ -19,13 +20,14 @@ export default function ReceiptsPage() {
     <>
       <PageHeader
         title="Money received"
-        description="Every payment customers made against a bill: at the office, to technicians on site, and online."
+        description="Every payment customers made against a bill (at the office, to technicians on site, and online), and money received without a bill."
         actions={
           <Link to={`/reports?report=receipts`}>
             <Button variant="secondary">Export</Button>
           </Link>
         }
       />
+      <MoneyInTabs current="bills" />
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Total received" value={money(total)} tone="blue" />
         {(['cash', 'upi', 'cheque', 'bank_transfer'] as const).map((m) => (

@@ -76,7 +76,7 @@ export default function AccountsOverview() {
             {!d.opening.date && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <span>Set your opening cash and bank balances so the cash and bank books show real balances.</span>
-                <Link to="/accounts/cash-bank?opening=1" className="font-medium underline">
+                <Link to="/accounts/ledger?opening=1" className="font-medium underline">
                   Set opening balances
                 </Link>
               </div>
@@ -94,7 +94,7 @@ export default function AccountsOverview() {
                     icon={<Wallet className="h-5 w-5" />}
                     title="Check cash from technicians"
                     text={d.pending_cash_closes ? `${d.pending_cash_closes} handover${d.pending_cash_closes > 1 ? 's' : ''} waiting for you to check.` : 'Count what each technician hands over.'}
-                    to="/accounts/cash-close"
+                    to="/accounts/register"
                     alert={d.pending_cash_closes > 0}
                   />
                 )}
@@ -155,7 +155,7 @@ export default function AccountsOverview() {
             </div>
 
             <div className="grid gap-6 xl:grid-cols-3">
-              <Card title="Recent transactions" padded={false} className="xl:col-span-2" actions={<Link to="/accounts/books" className="text-sm font-medium text-brand-700 hover:underline">See all</Link>}>
+              <Card title="Recent transactions" padded={false} className="xl:col-span-2" actions={<Link to="/accounts/ledger?tab=day-book" className="text-sm font-medium text-brand-700 hover:underline">See all</Link>}>
                 {!d.recent.length ? (
                   <p className="px-5 py-8 text-center text-sm text-slate-500">No money in or out in the last 30 days.</p>
                 ) : (
@@ -212,7 +212,7 @@ export default function AccountsOverview() {
 }
 
 /** Record payment: pick the unpaid bill the customer is paying, then the usual payment form. */
-function PaymentPicker({ onClose }: { onClose: () => void }) {
+export function PaymentPicker({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [picked, setPicked] = useState<Invoice | null>(null);
@@ -265,8 +265,8 @@ function PaymentPicker({ onClose }: { onClose: () => void }) {
 
 /** Each place money sits keeps one colour everywhere on this page. */
 const PLACES = {
-  cash: { label: 'Office cash', color: '#047857', to: '/accounts/cash-bank?book=cash', note: 'Notes and coins at the office' },
-  bank: { label: 'Bank & UPI', color: '#2563EB', to: '/accounts/cash-bank?book=bank', note: 'Bank account and UPI' },
+  cash: { label: 'Office cash', color: '#047857', to: '/accounts/register', note: 'Notes and coins at the office' },
+  bank: { label: 'Bank & UPI', color: '#2563EB', to: '/accounts/ledger?account=bank', note: 'Bank account and UPI' },
   tech: { label: 'With technicians', color: '#B45309', to: '/accounts/cash-close?tab=in_hand', note: 'Collected on jobs, not handed over yet' },
 } as const;
 
@@ -352,7 +352,7 @@ function MonthSum({ month, last }: { month: Overview['month']; last: Overview['l
       </div>
       {/* Same rows in every part (label, amount, note), so the signs line up with the amounts. */}
       <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1fr)_1.5rem_minmax(0,1.15fr)]">
-        <SumPart label="Came in" value={month.income} tone="text-emerald-700" hint={change(month.income, last.income)} to="/accounts/books" />
+        <SumPart label="Came in" value={month.income} tone="text-emerald-700" hint={change(month.income, last.income)} to="/accounts/receipts" />
         <Sign>−</Sign>
         <SumPart label="Went out" value={month.expense} tone="text-red-700" hint={change(month.expense, last.expense)} to="/accounts/expenses" />
         <Sign>=</Sign>

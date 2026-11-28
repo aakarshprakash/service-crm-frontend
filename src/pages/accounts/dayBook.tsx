@@ -1,101 +1,20 @@
 import type { ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { FileBarChart } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
-import { useLookups } from '@/lib/hooks';
-import { date, money, moneyShort, monthStart, today } from '@/lib/format';
+import { date, money, moneyShort } from '@/lib/format';
 import type { BooksSummary, DayBookRow } from '@/lib/types';
-import { Card, DataTable, EmptyState, FilterBar, Input, PageHeader, QueryState, Select, StatCard, Tabs } from '@/components/ui';
+import { Card, DataTable, EmptyState, QueryState, StatCard } from '@/components/ui';
 import { MethodLabel } from '@/components/domain';
 
 const INCOME = '#2a78d6';
 const EXPENSE = '#eb6834';
 
-type Tab = 'summary' | 'day-book';
+export type Period = { from: string; to: string; branch_id?: string };
 
-function lastMonth(): { from: string; to: string } {
-  const [y, m] = monthStart().split('-').map(Number) as [number, number];
-  const py = m === 1 ? y - 1 : y;
-  const pm = m === 1 ? 12 : m - 1;
-  const days = new Date(py, pm, 0).getDate();
-  const mm = String(pm).padStart(2, '0');
-  return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${days}` };
-}
-
-/** Mini accounts: money in (payments on job invoices and walk-in bills) against money out (expenses). */
-export default function BooksPage() {
-  const [params, setParams] = useSearchParams();
-  const { data: lookups } = useLookups();
-  const tab = (params.get('tab') as Tab) || 'day-book';
-  const period = { from: params.get('from') || monthStart(), to: params.get('to') || today(), branch_id: params.get('branch_id') || undefined };
-
-  const set = (next: Record<string, string | undefined>) => {
-    const p = new URLSearchParams(params);
-    Object.entries(next).forEach(([k, v]) => (v ? p.set(k, v) : p.delete(k)));
-    setParams(p, { replace: true });
-  };
-  const preset = (v: string) => {
-    if (v === 'today') set({ from: today(), to: today() });
-    else if (v === 'month') set({ from: undefined, to: undefined });
-    else if (v === 'last-month') set(lastMonth());
-  };
-  const currentPreset =
-    period.from === today() && period.to === today() ? 'today' : period.from === monthStart() && period.to === today() ? 'month' : period.from === lastMonth().from && period.to === lastMonth().to ? 'last-month' : 'custom';
-
-  return (
-    <>
-      <PageHeader
-        title="All transactions"
-        description="Every rupee that came in or went out, in date order, with a day-by-day total."
-        actions={
-          <Link to="/reports?report=day-book" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline">
-            <FileBarChart className="h-4 w-4" /> Export reports
-          </Link>
-        }
-      />
-      <Tabs
-        className="mb-4"
-        value={tab}
-        onChange={(v) => set({ tab: v === 'day-book' ? undefined : v })}
-        tabs={[
-          { value: 'day-book', label: 'Day book' },
-          { value: 'summary', label: 'Daily income vs expenses' },
-        ]}
-      />
-      <Card padded={false} className="mb-6">
-        <FilterBar>
-          <Select value={currentPreset} onChange={(e) => preset(e.target.value)} className="sm:w-40" aria-label="Period">
-            <option value="today">Today</option>
-            <option value="month">This month</option>
-            <option value="last-month">Last month</option>
-            <option value="custom" disabled>
-              Custom
-            </option>
-          </Select>
-          <Input type="date" value={period.from} max={period.to} onChange={(e) => set({ from: e.target.value })} className="sm:w-40" aria-label="From" />
-          <Input type="date" value={period.to} min={period.from} max={today()} onChange={(e) => set({ to: e.target.value })} className="sm:w-40" aria-label="To" />
-          {(lookups?.branches.length ?? 0) > 1 && (
-            <Select value={period.branch_id ?? ''} onChange={(e) => set({ branch_id: e.target.value })} className="sm:w-44" aria-label="Branch">
-              <option value="">All branches</option>
-              {lookups?.branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
-          )}
-        </FilterBar>
-      </Card>
-      {tab === 'summary' ? <Summary period={period} /> : <DayBook period={period} />}
-    </>
-  );
-}
-
-type Period = { from: string; to: string; branch_id?: string };
-
-function Summary({ period }: { period: Period }) {
+/** Money in and out day by day for a period, with where it came from and where it went. */
+export function DailySummary({ period }: { period: Period }) {
   const q = useQuery({ queryKey: ['books', 'summary', period], queryFn: () => api.get<Envelope<BooksSummary>>('/books/summary', period).then((r) => r.data) });
   const s = q.data;
   return (
@@ -174,7 +93,8 @@ function Breakdown({ rows, total, color }: { rows: [ReactNode, number][]; total:
   );
 }
 
-function DayBook({ period }: { period: Period }) {
+/** Every rupee that came in or went out, in date order. */
+export function DayBook({ period }: { period: Period }) {
   const q = useQuery({
     queryKey: ['books', 'day-book', period],
     queryFn: () => api.get<Envelope<DayBookRow[]> & { meta: { in: number; out: number } }>('/books/day-book', period),

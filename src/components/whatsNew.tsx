@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Fingerprint, MonitorSmartphone, Pencil, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
+import { BookOpenCheck, CalendarCheck, Inbox, ReceiptText } from 'lucide-react';
 import { Button, Modal } from '@/components/ui';
 
 export const APP_VERSION = __APP_VERSION__;
@@ -8,12 +8,10 @@ export const APP_VERSION = __APP_VERSION__;
 const SEEN_KEY = 'servon.whatsNew.seen';
 
 const ITEMS = [
-  { icon: ShieldCheck, key: 'team' },
-  { icon: UserRound, key: 'staff' },
-  { icon: Pencil, key: 'editJob' },
-  { icon: Fingerprint, key: 'punch' },
-  { icon: Smartphone, key: 'app22' },
-  { icon: MonitorSmartphone, key: 'devices' },
+  { icon: CalendarCheck, key: 'register23' },
+  { icon: BookOpenCheck, key: 'ledger23' },
+  { icon: Inbox, key: 'enquiries23' },
+  { icon: ReceiptText, key: 'gst23' },
 ] as const;
 
 /** Opens the "What's new" dialog once per version per browser. */

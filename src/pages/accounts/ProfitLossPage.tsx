@@ -4,8 +4,9 @@ import { FileBarChart, Printer } from 'lucide-react';
 import { api, type Envelope } from '@/lib/api';
 import { date, money } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { Button, Card, PageHeader, QueryState } from '@/components/ui';
+import { Button, Card, PageHeader, QueryState, Tabs } from '@/components/ui';
 import { PeriodFilter, usePeriod } from '@/components/period';
+import { DailySummary } from './dayBook';
 
 interface Line { label: string; current: number; previous: number }
 interface Statement {
@@ -25,7 +26,8 @@ interface Statement {
 export default function ProfitLossPage() {
   const state = usePeriod();
   const { period } = state;
-  const q = useQuery({ queryKey: ['books', 'pl', period], queryFn: () => api.get<Envelope<Statement>>('/books/profit-loss', period).then((r) => r.data) });
+  const tab = state.params.get('tab') === 'daily' ? 'daily' : 'statement';
+  const q = useQuery({ queryKey: ['books', 'pl', period], queryFn: () => api.get<Envelope<Statement>>('/books/profit-loss', period).then((r) => r.data), enabled: tab === 'statement' });
   const s = q.data;
 
   return (
@@ -46,9 +48,21 @@ export default function ProfitLossPage() {
           </>
         }
       />
+      <Tabs
+        className="mb-4 print:hidden"
+        value={tab}
+        onChange={(v) => state.set({ tab: v === 'statement' ? undefined : v })}
+        tabs={[
+          { value: 'statement', label: 'Statement' },
+          { value: 'daily', label: 'Day by day' },
+        ]}
+      />
       <Card padded={false} className="mb-6 print:hidden">
         <PeriodFilter state={state} />
       </Card>
+      {tab === 'daily' ? (
+        <DailySummary period={period} />
+      ) : (
       <QueryState loading={q.isLoading} error={q.error} onRetry={q.refetch}>
         {s && (
           <Card padded={false} className="mx-auto max-w-3xl">
@@ -98,11 +112,16 @@ export default function ProfitLossPage() {
             </table>
             <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
               Cash basis: income counts when payment is received; unpaid invoices are under Receivables. Salaries appear once a payroll is marked paid.
-              GST inside each payment is worked out exactly from its invoice and kept out of profit.
+              GST inside each payment is worked out exactly from its invoice and kept out of profit. The{' '}
+              <Link to="/accounts/ledger?tab=trial" className="text-brand-700 hover:underline print:no-underline">
+                ledger
+              </Link>{' '}
+              counts sales on the bill date instead.
             </p>
           </Card>
         )}
       </QueryState>
+      )}
     </>
   );
 }
