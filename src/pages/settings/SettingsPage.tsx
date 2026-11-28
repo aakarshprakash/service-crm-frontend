@@ -36,7 +36,7 @@ interface SettingsData {
   has_stamp: boolean;
   settings: {
     photo_types?: { key: string; label: string }[];
-    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind; estimates?: BillKind; estimate_prices?: 'before_gst' | 'include_gst'; walkin_prices?: 'before_gst' | 'include_gst' };
+    gst: { service_sac: string; service_rate: number; part_rate: number; job_bills?: BillKind; walkin_bills?: BillKind; estimates?: BillKind; estimate_prices?: 'before_gst' | 'include_gst'; walkin_prices?: 'before_gst' | 'include_gst'; job_prices?: 'before_gst' | 'include_gst' };
     signature?: { estimates: boolean; invoices: boolean };
     bank?: BankDetails;
     numbering: Record<NumberType, NumberRule>;
@@ -497,7 +497,7 @@ function Invoicing({ data }: { data: SettingsData }) {
       </div>
 
       <Card title="GST or non-GST bills">
-        <p className="mb-4 text-sm text-slate-500">Choose how each kind of bill starts. Prices include GST, so the customer pays the same either way: a GST bill also shows the tax, and a non-GST bill doesn’t.</p>
+        <p className="mb-4 text-sm text-slate-500">Choose how each kind of bill starts. With GST-inclusive prices the customer pays the same either way: a GST bill also shows the tax, and a non-GST bill doesn’t. With GST-exclusive prices, GST is added on top of a GST bill.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Bills from technician visits" hint="An admin or accountant can still change a single bill on its invoice page.">
             <Select value={gst.job_bills ?? 'gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, job_bills: ev.target.value as BillKind })}>
@@ -513,9 +513,18 @@ function Invoicing({ data }: { data: SettingsData }) {
           </Field>
           <Field
             label="Prices on walk-in GST bills"
-            hint={(gst.walkin_prices ?? 'include_gst') === 'include_gst' ? 'The customer pays the price typed; the GST inside it is shown. Bills from technician visits always work this way.' : 'GST is added to the prices typed, so the customer pays more. Bills from technician visits still include GST.'}
+            hint={(gst.walkin_prices ?? 'include_gst') === 'include_gst' ? 'The customer pays the price typed; the GST inside it is shown.' : 'GST is added to the prices typed, so the customer pays more.'}
           >
             <Select value={gst.walkin_prices ?? 'include_gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, walkin_prices: ev.target.value as 'before_gst' | 'include_gst' })}>
+              <option value="include_gst">GST inclusive: the price already contains GST</option>
+              <option value="before_gst">GST exclusive: GST is added on top</option>
+            </Select>
+          </Field>
+          <Field
+            label="Prices on technician GST bills"
+            hint={(gst.job_prices ?? 'include_gst') === 'include_gst' ? 'The customer pays the charges the technician types; the GST inside them is shown. The technician can switch a new bill to GST exclusive.' : 'GST is added to the charges the technician types, and the app shows the total to collect. The technician can switch a new bill to GST inclusive.'}
+          >
+            <Select value={gst.job_prices ?? 'include_gst'} disabled={!registered} onChange={(ev) => setGst({ ...gst, job_prices: ev.target.value as 'before_gst' | 'include_gst' })}>
               <option value="include_gst">GST inclusive: the price already contains GST</option>
               <option value="before_gst">GST exclusive: GST is added on top</option>
             </Select>

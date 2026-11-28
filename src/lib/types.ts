@@ -481,6 +481,8 @@ export interface Lookups {
     estimate_prices?: 'before_gst' | 'include_gst' | null;
     /** Settings → GST: whether the prices on a counter bill include GST or have it added on top. */
     walkin_prices?: 'before_gst' | 'include_gst' | null;
+    /** The same for bills from technician visits (the technician can change a new bill). */
+    job_prices?: 'before_gst' | 'include_gst' | null;
   };
   /** The company signature and stamp: whether they are uploaded, and whether a new estimate shows them by default. */
   signature?: {
